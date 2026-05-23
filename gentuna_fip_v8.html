@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GENTUNA FIP License Manager</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:#f8f7f4;--surface:#ffffff;--surface2:#f2f1ee;--border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.18);
+    --text:#1a1a18;--text2:#6b6a66;--text3:#9b9a96;
+    --blue:#185FA5;--blue-bg:#e6f1fb;--blue-text:#0c447c;
+    --green:#3B6D11;--green-bg:#eaf3de;--green-text:#27500a;
+    --amber:#854F0B;--amber-bg:#faeeda;--amber-text:#633806;
+    --red:#A32D2D;--red-bg:#fcebeb;--red-text:#791f1f;
+    --purple:#534AB7;--purple-bg:#eeedfe;--purple-text:#3c3489;
+    --radius:8px;--radius-lg:12px;--shadow:0 1px 3px rgba(0,0,0,0.08);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;background:var(--bg);color:var(--text);min-height:100vh}
+  a{color:var(--blue)}
+  .app-shell{display:flex;min-height:100vh}
+  .sidebar{width:220px;background:var(--surface);border-right:0.5px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .sidebar-logo{padding:1.25rem 1.25rem 1rem;border-bottom:0.5px solid var(--border)}
+  .sidebar-logo h1{font-size:14px;font-weight:700;color:var(--blue);line-height:1.3}
+  .sidebar-logo p{font-size:11px;color:var(--text3);margin-top:2px}
+  .sidebar-nav{padding:.5rem 0;flex:1}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:9px 1.25rem;font-size:13px;color:var(--text2);cursor:pointer;border:none;background:none;width:100%;text-align:left;border-left:2px solid transparent;font-family:inherit}
+  .nav-item:hover{background:var(--surface2);color:var(--text)}
+  .nav-item.active{background:var(--blue-bg);color:var(--blue);border-left-color:var(--blue);font-weight:600}
+  .nav-item i{font-size:16px}
+  .sync-bar{padding:.75rem 1.25rem;border-top:0.5px solid var(--border);font-size:11px;color:var(--text2)}
+  .sync-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text3);margin-right:5px;vertical-align:middle}
+  .sync-dot.ok{background:var(--green)}
+  .sync-dot.busy{background:var(--amber)}
+  .sync-dot.err{background:var(--red)}
+  .main{flex:1;overflow-y:auto;height:100vh}
+  .main-inner{max-width:1100px;padding:1.5rem}
+  .topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:1.25rem}
+  .topbar h2{font-size:18px;font-weight:700}
+  .topbar p{font-size:12px;color:var(--text3);margin-top:1px}
+  .top-actions{display:flex;gap:8px;flex-wrap:wrap}
+  .sec{display:none}.sec.active{display:block}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem}
+  .metric{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius);padding:.9rem 1rem;box-shadow:var(--shadow)}
+  .metric-val{font-size:24px;font-weight:700}.metric-lbl{font-size:11px;color:var(--text2);margin-top:2px}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;font-size:13px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit}
+  .btn:hover{background:var(--surface2)}.btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}.btn.primary:hover{background:var(--blue-text)}
+  .btn.sm{padding:4px 10px;font-size:11px}.btn.danger{border-color:var(--red);color:var(--red)}.btn.danger:hover{background:var(--red-bg)}
+  .ib{background:none;border:0.5px solid var(--border);border-radius:6px;padding:4px 6px;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit}
+  .ib:hover{background:var(--surface2)}.ib.d:hover{color:var(--red);border-color:var(--red)}
+  .card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.1rem 1.25rem;margin-bottom:.75rem;box-shadow:var(--shadow)}
+  .card h3{font-size:13px;font-weight:700;margin-bottom:.7rem}
+  .tbl-wrap{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:auto;margin-bottom:1rem;box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse;table-layout:fixed;min-width:700px}
+  thead{background:var(--surface2)}
+  th{font-size:11px;font-weight:700;color:var(--text2);padding:9px 10px;text-align:left;border-bottom:0.5px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}
+  th:hover{color:var(--text)}.th.sorted{color:var(--blue)}.si{font-size:10px;margin-left:2px;opacity:.5}.sorted .si{opacity:1;color:var(--blue)}
+  td{font-size:12px;padding:9px 10px;border-bottom:0.5px solid var(--border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
+  .act-btns{display:flex;gap:3px}
+  .badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .badge.active{background:var(--green-bg);color:var(--green)}.badge.expiring{background:var(--amber-bg);color:var(--amber)}
+  .badge.expired{background:var(--red-bg);color:var(--red)}.badge.noexpiry{background:var(--purple-bg);color:var(--purple)}
+  .badge.complete{background:var(--green-bg);color:var(--green)}.badge.partial{background:var(--amber-bg);color:var(--amber)}.badge.missing{background:var(--red-bg);color:var(--red)}
+  .ctrls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .ctrls input,.ctrls select{font-size:12px;padding:7px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text);flex:1;min-width:120px;font-family:inherit}
+  .fr{margin-bottom:12px}.fr label{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:700}
+  .fr input,.fr select,.fr textarea{width:100%;font-size:13px;padding:8px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit}
+  .fr input:focus,.fr select:focus,.fr textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(24,95,165,0.1)}
+  .fr textarea{resize:vertical;min-height:60px}
+  .fr-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem;z-index:100;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .modal-bg.hidden{display:none!important;pointer-events:none}
+  .modal-bg .modal{pointer-events:all;position:relative}
+  .modal{background:var(--surface);border-radius:var(--radius-lg);border:0.5px solid var(--border);padding:1.5rem;width:100%;max-width:580px;box-shadow:0 8px 32px rgba(0,0,0,0.18)}
+  .modal h2{font-size:15px;font-weight:700;margin-bottom:1.1rem}
+  .modal-footer{display:flex;justify-content:flex-end;gap:8px;padding-top:1rem;border-top:0.5px solid var(--border);margin-top:1rem}
+  .file-zone{border:1.5px dashed var(--border2);border-radius:var(--radius);padding:1rem;text-align:center;cursor:pointer;color:var(--text2);font-size:12px}
+  .file-zone:hover{background:var(--surface2)}
+  .fbadge{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border-radius:var(--radius);padding:4px 9px;font-size:11px;margin-top:5px}
+  .alert{background:var(--amber-bg);border-radius:var(--radius);padding:.7rem 1rem;font-size:12px;color:var(--amber-text);margin-bottom:1rem;display:flex;align-items:center;gap:7px}
+  .etag{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:0.5px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px;margin:2px}
+  .etag button{background:none;border:none;cursor:pointer;color:var(--red);font-size:14px;line-height:1;padding:0}
+  .hist-item{background:var(--surface2);border:0.5px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:6px}
+  .hist-item-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .hist-meta{font-size:11px;color:var(--text2);margin-top:3px}
+  .hist-edit-form{margin-top:10px;padding-top:10px;border-top:0.5px solid var(--border);display:none}
+  .hist-edit-form.open{display:block}
+  .vessel-card{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:1.1rem;margin-bottom:.75rem;box-shadow:var(--shadow)}
+  .vessel-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:.6rem;flex-wrap:wrap}
+  .vessel-name{font-size:14px;font-weight:700}
+  .vessel-meta{font-size:11px;color:var(--text2);margin-top:2px}
+  .prog-wrap{display:flex;align-items:center;gap:8px;margin-top:.5rem;margin-bottom:.75rem}
+  .prog-bar{flex:1;height:7px;background:var(--surface2);border-radius:4px;overflow:hidden}
+  .prog-fill{height:100%;border-radius:4px;transition:width .3s}
+  .doc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .doc-item{display:flex;align-items:center;gap:7px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);font-size:12px;cursor:pointer}
+  .doc-item:hover{filter:brightness(.96)}
+  .doc-item.has{border-color:var(--green);background:var(--green-bg);color:var(--green-text)}
+  .doc-item.missing{border-color:var(--red);background:var(--red-bg);color:var(--red-text)}
+  .doc-item i{font-size:15px;flex-shrink:0}
+  .sec-hdr{font-size:14px;font-weight:700;margin-bottom:.8rem}
+  .tmpl-area{width:100%;font-size:12px;padding:8px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text);resize:vertical;min-height:90px;font-family:'Segoe UI',system-ui,sans-serif}
+  .tmpl-area:focus{outline:none;border-color:var(--blue)}
+  code{background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace}
+  .empty{text-align:center;padding:2rem;color:var(--text2);font-size:13px}
+
+  /* Setup screen */
+  .setup-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;background:var(--bg)}
+  .setup-box{background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);padding:2rem;width:100%;max-width:520px;box-shadow:0 4px 24px rgba(0,0,0,0.1)}
+  .setup-box h1{font-size:20px;font-weight:700;color:var(--blue);margin-bottom:.5rem}
+  .setup-box p{font-size:13px;color:var(--text2);margin-bottom:1.25rem;line-height:1.6}
+  .step{display:flex;gap:12px;margin-bottom:1rem;padding:12px;background:var(--surface2);border-radius:var(--radius)}
+  .step-num{width:24px;height:24px;border-radius:50%;background:var(--blue);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .step-body{font-size:12px;line-height:1.6;color:var(--text)}
+  .step-body b{font-weight:700}
+  .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.8);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;font-size:14px;color:var(--text2);gap:12px}
+  .spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(max-width:700px){.sidebar{display:none}.fr-row{grid-template-columns:1fr}.doc-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <span id="loading-msg">Connecting to Google Sheets…</span>
+</div>
+
+<!-- SETUP SCREEN (shown when no API URL is configured) -->
+<div class="setup-screen" id="setup-screen" style="display:none">
+  <div class="setup-box">
+    <h1>GENTUNA FIP License Manager</h1>
+    <p>To get started, connect this app to your Google Sheet. Follow these steps:</p>
+    <div class="step"><div class="step-num">1</div><div class="step-body">Go to <a href="https://sheets.google.com" target="_blank">sheets.google.com</a>, create a new spreadsheet, and name it <b>GENTUNA FIP Database</b>.</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">In the spreadsheet, click <b>Extensions → Apps Script</b>. Paste the Apps Script code (provided separately), click <b>Save</b>.</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">Click <b>Deploy → New deployment</b>. Set type to <b>Web app</b>, set access to <b>Anyone</b>, click <b>Deploy</b>. Copy the Web App URL.</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body">Paste the Web App URL below and click <b>Connect</b>.</div></div>
+    <div class="fr" style="margin-top:1rem">
+      <label>Google Apps Script Web App URL</label>
+      <input type="url" id="setup-url" placeholder="https://script.google.com/macros/s/.../exec" style="font-size:13px">
+    </div>
+    <div id="setup-error" style="font-size:12px;color:var(--red);margin-bottom:.75rem;display:none"></div>
+    <button class="btn primary" onclick="connectSheet()" style="width:100%;justify-content:center;padding:10px">
+      <i class="ti ti-plug"></i> Connect to Google Sheets
+    </button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app-shell" id="app" style="display:none">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>GENTUNA FIP</h1>
+      <p>License Manager</p>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-tab="dashboard"><i class="ti ti-dashboard"></i> Dashboard</button>
+      <button class="nav-item" data-tab="documents"><i class="ti ti-license"></i> Documents</button>
+      <button class="nav-item" data-tab="tracker"><i class="ti ti-ship"></i> Document tracker</button>
+      <button class="nav-item" data-tab="companies"><i class="ti ti-building"></i> Companies</button>
+      <button class="nav-item" data-tab="reminders"><i class="ti ti-bell"></i> Reminders</button>
+      <button class="nav-item" data-tab="settings"><i class="ti ti-settings"></i> Settings</button>
+    </nav>
+    <div class="sync-bar">
+      <span class="sync-dot" id="sync-dot"></span>
+      <span id="sync-label">Not synced</span>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px" id="last-backup-label"></div>
+      <button class="btn sm" onclick="syncNow()" style="margin-top:6px;width:100%;justify-content:center"><i class="ti ti-refresh"></i> Sync now</button>
+      <button class="btn sm" onclick="manualBackup()" style="margin-top:4px;width:100%;justify-content:center;background:var(--green-bg);color:var(--green);border-color:var(--green)"><i class="ti ti-download"></i> Download backup</button>
+      <button class="btn sm" onclick="document.getElementById('import-file').click()" style="margin-top:4px;width:100%;justify-content:center"><i class="ti ti-upload"></i> Import from backup</button>
+      <input type="file" id="import-file" accept=".xlsx,.json" style="display:none" onchange="importBackup(this)">
+      <button class="btn sm danger" onclick="disconnectSheet()" style="margin-top:4px;width:100%;justify-content:center"><i class="ti ti-plug-x"></i> Disconnect</button>
+    </div>
+  </aside>
+
+  <main class="main">
+  <div class="main-inner">
+
+    <!-- DASHBOARD -->
+    <div id="tab-dashboard" class="sec active">
+      <div class="topbar">
+        <div><h2>Dashboard</h2><p>GENTUNA FIP license overview</p></div>
+        <div class="top-actions">
+          <button class="btn" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Export Excel</button>
+          <button class="btn" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> Export PDF</button>
+          <button class="btn primary" onclick="openAdd()"><i class="ti ti-plus"></i> Add document</button>
+        </div>
+      </div>
+      <div class="metrics" id="metrics"></div>
+      <div id="alert-area"></div>
+      <div class="sec-hdr">Expiring or expired documents</div>
+      <div class="tbl-wrap"><table>
+        <thead><tr>
+          <th style="width:20%">Company</th><th style="width:14%">Vessel</th>
+          <th style="width:11%">Vessel type</th><th style="width:18%">License type</th>
+          <th style="width:11%">Expiry</th><th style="width:8%">Days left</th><th style="width:10%">Status</th>
+        </tr></thead>
+        <tbody id="dash-tbody"></tbody>
+      </table></div>
+    </div>
+
+    <!-- DOCUMENTS -->
+    <div id="tab-documents" class="sec">
+      <div class="topbar">
+        <div><h2>Documents</h2><p>All licenses and certificates</p></div>
+        <div class="top-actions">
+          <button class="btn" onclick="exportExcel()"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+          <button class="btn" onclick="exportPDF()"><i class="ti ti-file-type-pdf"></i> PDF</button>
+          <button class="btn primary" onclick="openAdd()"><i class="ti ti-plus"></i> Add document</button>
+        </div>
+      </div>
+      <div class="ctrls">
+        <input type="text" id="s-search" placeholder="Search license #, vessel, company..." oninput="renderDocs()">
+        <select id="s-company" onchange="onCompanyFilter()"><option value="">All companies</option></select>
+        <select id="s-vessel" onchange="renderDocs()"><option value="">All vessels</option></select>
+        <select id="s-vtype" onchange="renderDocs()"><option value="">All vessel types</option></select>
+        <select id="s-type" onchange="renderDocs()"><option value="">All license types</option></select>
+        <select id="s-status" onchange="renderDocs()">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="expiring">Expiring soon</option>
+          <option value="expired">Expired</option>
+          <option value="noexpiry">No expiry</option>
+        </select>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr id="doc-thead"></tr></thead>
+        <tbody id="doc-tbody"></tbody>
+      </table></div>
+    </div>
+
+    <!-- TRACKER -->
+    <div id="tab-tracker" class="sec">
+      <div class="topbar"><div><h2>Document tracker</h2><p>Required documents per vessel</p></div></div>
+      <div class="ctrls">
+        <select id="sv-company" onchange="onTrackerCompanyFilter()"><option value="">All companies</option></select>
+        <select id="sv-vtype" onchange="renderTracker()"><option value="">All vessel types</option></select>
+        <select id="sv-docs" onchange="renderTracker()">
+          <option value="">All statuses</option>
+          <option value="complete">Complete</option>
+          <option value="partial">Partial</option>
+          <option value="missing">Missing</option>
+        </select>
+      </div>
+      <div id="tracker-list"></div>
+    </div>
+
+    <!-- COMPANIES -->
+    <div id="tab-companies" class="sec">
+      <div class="topbar">
+        <div><h2>Companies</h2><p>Manage companies and their vessels</p></div>
+        <button class="btn primary" onclick="openCo(null)"><i class="ti ti-plus"></i> Add company</button>
+      </div>
+      <div id="co-list"></div>
+    </div>
+
+    <!-- REMINDERS -->
+    <div id="tab-reminders" class="sec">
+      <div class="topbar"><div><h2>Reminders</h2><p>Email notifications for expiring documents</p></div></div>
+      <div class="card">
+        <h3><i class="ti ti-mail"></i> Admin emails (always notified)</h3>
+        <div id="admin-email-tags" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <input type="email" id="new-admin-email" placeholder="admin@gentuna.org" style="flex:1;font-size:13px;padding:7px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit">
+          <button class="btn" onclick="addAdminEmail()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Reminder thresholds</h3>
+        <div class="fr-row" style="gap:10px">
+          <div class="fr"><label>Reminder 1 (days before)</label><input type="number" id="rem-d1" value="90" min="1" oninput="saveSettings()"></div>
+          <div class="fr"><label>Reminder 2 (days before)</label><input type="number" id="rem-d2" value="60" min="1" oninput="saveSettings()"></div>
+        </div>
+        <div class="fr-row" style="gap:10px">
+          <div class="fr"><label>Reminder 3 (days before)</label><input type="number" id="rem-d3" value="30" min="1" oninput="saveSettings()"></div>
+          <div class="fr"><label>Reminder 4 (days before)</label><input type="number" id="rem-d4" value="7" min="1" oninput="saveSettings()"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Email templates</h3>
+        <p style="font-size:11px;color:var(--text2);margin-bottom:.9rem">Placeholders: <code>{{company}}</code> <code>{{vessel}}</code> <code>{{license_type}}</code> <code>{{license_num}}</code> <code>{{expiry_date}}</code> <code>{{days_left}}</code></p>
+        <div id="tmpl-forms"></div>
+      </div>
+      <div class="sec-hdr">Documents needing attention</div>
+      <div id="reminder-list"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="tab-settings" class="sec">
+      <div class="topbar"><div><h2>Settings</h2></div></div>
+      <div class="card">
+        <h3>License types <span style="font-size:11px;font-weight:400;color:var(--text2)">(all required per vessel in the Document tracker)</span></h3>
+        <div id="lic-types-list"></div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" id="new-lic-type" placeholder="Add license type..." style="flex:1;font-size:13px;padding:7px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit">
+          <button class="btn primary" onclick="addLicType()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Vessel types</h3>
+        <div id="vtype-tags" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="new-vtype" placeholder="Add vessel type..." style="flex:1;font-size:13px;padding:7px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit">
+          <button class="btn primary" onclick="addVType()"><i class="ti ti-plus"></i> Add</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </main>
+</div>
+
+<!-- ADD/EDIT DOCUMENT MODAL -->
+<div class="modal-bg hidden" id="doc-modal-bg">
+<div class="modal">
+  <h2 id="doc-modal-title">Add document</h2>
+  <div class="fr-row">
+    <div class="fr"><label>Company *</label><select id="f-company" onchange="onFormCompanyChange()"></select></div>
+    <div class="fr"><label>Vessel *</label><select id="f-vessel-sel"></select></div>
+  </div>
+  <div class="fr-row">
+    <div class="fr"><label>Vessel type *</label><select id="f-vtype"></select></div>
+    <div class="fr"><label>License type *</label><select id="f-ltype"></select></div>
+  </div>
+  <div class="fr-row">
+    <div class="fr"><label>License number *</label><input id="f-num" placeholder="e.g. BFAR-2024-001"></div>
+    <div class="fr"><label>Issuing agency</label><input id="f-agency" placeholder="e.g. BFAR Region X"></div>
+  </div>
+  <div class="fr-row">
+    <div class="fr"><label>Issue date</label><input type="date" id="f-issued"></div>
+    <div class="fr"><label>Expiry date</label><input type="date" id="f-expiry"></div>
+  </div>
+  <div class="fr" style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:0.5px solid var(--border);border-radius:var(--radius);background:var(--surface2)">
+    <input type="checkbox" id="f-noexpiry" onchange="toggleExpiry()" style="width:15px;height:15px;cursor:pointer">
+    <label for="f-noexpiry" style="font-size:12px;cursor:pointer;font-weight:400;margin:0">This certificate/license does not expire</label>
+  </div>
+  <div class="fr"><label>Reference link (optional)</label><input type="url" id="f-link" placeholder="https://..."></div>
+  <div class="fr"><label>Notes</label><textarea id="f-notes" placeholder="Remarks..."></textarea></div>
+  <div class="fr">
+    <label>License file (PDF or image)</label>
+    <div class="file-zone" onclick="document.getElementById('f-file').click()">
+      <i class="ti ti-upload" style="font-size:20px;display:block;margin-bottom:4px"></i>Click to upload
+      <input type="file" id="f-file" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleFile(this)">
+    </div>
+    <div id="f-file-preview"></div>
+  </div>
+  <div id="hist-section" style="display:none;margin-top:.5rem">
+    <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;display:flex;align-items:center;gap:5px"><i class="ti ti-history"></i> Previous versions</div>
+    <div id="hist-list"></div>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn" onclick="event.stopPropagation();closeDocModal()">Cancel</button>
+    <button type="button" class="btn primary" onclick="event.stopPropagation();saveDoc()"><i class="ti ti-check"></i> Save</button>
+  </div>
+</div>
+</div>
+
+<!-- COMPANY MODAL -->
+<div class="modal-bg hidden" id="co-modal-bg">
+<div class="modal">
+  <h2 id="co-modal-title">Add company</h2>
+  <div class="fr"><label>Company name *</label><input id="co-name" placeholder="Company name"></div>
+  <div class="fr"><label>Contact person</label><input id="co-contact" placeholder="Full name"></div>
+  <div class="fr">
+    <label>Company emails for reminders</label>
+    <div id="co-email-tags" style="margin-bottom:6px"></div>
+    <div style="display:flex;gap:8px">
+      <input type="email" id="new-co-email" placeholder="company@example.com" style="flex:1;font-size:13px;padding:7px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit">
+      <button class="btn" onclick="addCoEmail()"><i class="ti ti-plus"></i> Add</button>
+    </div>
+  </div>
+  <div class="fr"><label>Phone</label><input id="co-phone" placeholder="+63..."></div>
+  <div class="fr">
+    <label>Vessels under this company</label>
+    <div id="co-vessel-tags" style="margin-bottom:6px"></div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="new-co-vessel" placeholder="e.g. MV Sampaguita" style="flex:1;font-size:13px;padding:7px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit">
+      <button class="btn" onclick="addCoVessel()"><i class="ti ti-plus"></i> Add</button>
+    </div>
+  </div>
+  <div class="fr"><label>Notes</label><textarea id="co-notes" placeholder="Remarks..."></textarea></div>
+  <div class="modal-footer">
+    <button type="button" class="btn" onclick="event.stopPropagation();closeCoModal()">Cancel</button>
+    <button type="button" class="btn primary" onclick="event.stopPropagation();saveCo()"><i class="ti ti-check"></i> Save</button>
+  </div>
+</div>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────────
+const CONFIG_KEY = 'gentuna_fip_config';
+const CACHE_KEY  = 'gentuna_fip_cache';
+
+const DEF_LIC_TYPES = ['Commercial Fishing Vessel License','Distant Water Fishing Permit','Fishing Vessel Safety Certificate','Ship Station License','Certificate of Philippine Registry','Certificate of Ownership'];
+const DEF_VTYPES    = ['Catcher','Carrier','Lightboat'];
+const DEF_TMPLS = [
+  {label:'Reminder 1',subject:'[GENTUNA FIP] Advance notice — {{license_num}} expires in {{days_left}}',body:'Dear team,\n\nAdvance notice: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}}\nLicense type: {{license_type}}\nLicense number: {{license_num}}\nExpiry date: {{expiry_date}}\n\nPlease begin preparing renewal requirements.\n\nRegards,\nGENTUNA FIP License Manager'},
+  {label:'Reminder 2',subject:'[GENTUNA FIP] Renewal reminder — {{license_num}} expires in {{days_left}}',body:'Dear team,\n\nReminder: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}}\nLicense type: {{license_type}}\nLicense number: {{license_num}}\nExpiry date: {{expiry_date}}\n\nPlease submit all renewal requirements as soon as possible.\n\nRegards,\nGENTUNA FIP License Manager'},
+  {label:'Reminder 3',subject:'[GENTUNA FIP] URGENT — {{license_num}} expires in {{days_left}}',body:'Dear team,\n\nURGENT: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}}\nLicense type: {{license_type}}\nLicense number: {{license_num}}\nExpiry date: {{expiry_date}}\n\nImmediate action required to avoid lapse.\n\nRegards,\nGENTUNA FIP License Manager'},
+  {label:'Reminder 4',subject:'[GENTUNA FIP] CRITICAL — {{license_num}} expires in {{days_left}}',body:'Dear team,\n\nCRITICAL: The following document expires in {{days_left}} and must be renewed immediately.\n\nCompany: {{company}}\nVessel: {{vessel}}\nLicense type: {{license_type}}\nLicense number: {{license_num}}\nExpiry date: {{expiry_date}}\n\nEscalate immediately.\n\nRegards,\nGENTUNA FIP License Manager'}
+];
+
+let API_URL = '';
+let db = { documents:[], companies:[], licTypes:[...DEF_LIC_TYPES], vTypes:[...DEF_VTYPES], settings:{adminEmails:[],days1:90,days2:60,days3:30,days4:7,templates:JSON.parse(JSON.stringify(DEF_TMPLS))} };
+let editDocId=null, editCoId=null, pendingFile=null, pendingCoEmails=[], pendingCoVessels=[];
+let sortCol='company', sortDir=1;
+let saveTimeout=null;
+
+const DOC_COLS=[
+  {key:'company',label:'Company',w:'14%'},{key:'vessel',label:'Vessel',w:'11%'},{key:'vtype',label:'Vessel type',w:'10%'},
+  {key:'type',label:'License type',w:'15%'},{key:'num',label:'License #',w:'11%'},{key:'expiry',label:'Expiry',w:'9%'},
+  {key:'status',label:'Status',w:'8%'},{key:'_file',label:'File',w:'5%',nosort:true},{key:'_link',label:'Link',w:'4%',nosort:true},
+  {key:'_act',label:'',w:'10%',nosort:true}
+];
+
+// ─── STORAGE ──────────────────────────────────────────────────
+function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){console.warn('localStorage error',e);}}
+
+// ─── GOOGLE SHEETS API ────────────────────────────────────────
+function setSyncStatus(state, msg){
+  const dot=document.getElementById('sync-dot');
+  const lbl=document.getElementById('sync-label');
+  if(!dot||!lbl) return;
+  dot.className='sync-dot '+state;
+  lbl.textContent=msg;
+}
+
+// Uses GET for everything to avoid CORS preflight/redirect issues with Apps Script
+async function gasGet(action, data){
+  let url = API_URL + '?action=' + action;
+  if(data){
+    // Encode data as URL parameter — Apps Script handles it via e.parameter.data
+    const encoded = encodeURIComponent(JSON.stringify(data));
+    url += '&data=' + encoded;
+  }
+  // Use no-cors mode as fallback detection, but fetch normally first
+  const resp = await fetch(url, { method:'GET', redirect:'follow' });
+  if(!resp.ok) throw new Error('HTTP ' + resp.status);
+  const text = await resp.text();
+  // Apps Script sometimes wraps response — parse carefully
+  try {
+    return JSON.parse(text);
+  } catch(e) {
+    // If response is HTML (error page), extract useful message
+    if(text.includes('<')){
+      throw new Error('Apps Script returned an HTML error page. Check your deployment settings.');
+    }
+    throw new Error('Could not parse response: ' + text.slice(0,200));
+  }
+}
+
+async function loadFromSheets(){
+  setSyncStatus('busy','Loading…');
+  try {
+    const result = await gasGet('loadAll');
+    if(result.error) throw new Error(result.error);
+
+    // If Sheets returned empty documents, check if we have a local backup first
+    const sheetsEmpty = !result.documents || result.documents.length === 0;
+    if(sheetsEmpty){
+      const localBackup = lsGet(BACKUP_KEY);
+      if(localBackup && localBackup.data && localBackup.data.documents && localBackup.data.documents.length > 0){
+        const restoreTime = new Date(localBackup.savedAt).toLocaleString();
+        if(confirm('Google Sheets appears empty, but a local backup from '+restoreTime+' was found with '+localBackup.data.documents.length+' documents.\n\nRestore from local backup and re-save to Google Sheets?')){
+          const d = localBackup.data;
+          if(d.documents) db.documents = d.documents;
+          if(d.companies) db.companies = d.companies;
+          if(d.licTypes && d.licTypes.length)  db.licTypes = d.licTypes;
+          if(d.vTypes   && d.vTypes.length)    db.vTypes   = d.vTypes;
+          if(d.settings) db.settings = Object.assign(db.settings, d.settings);
+          lsSet(CACHE_KEY, db);
+          setSyncStatus('ok','Restored from backup · '+new Date().toLocaleTimeString());
+          // Push the restored data back to Sheets
+          await saveToSheets();
+          return true;
+        }
+      }
+    }
+
+    if(result.documents !== undefined) db.documents = result.documents;
+    if(result.companies !== undefined) db.companies = result.companies;
+    if(result.licTypes  !== undefined && result.licTypes.length)  db.licTypes = result.licTypes;
+    if(result.vTypes    !== undefined && result.vTypes.length)    db.vTypes   = result.vTypes;
+    if(result.settings  !== undefined){
+      db.settings = Object.assign(
+        {adminEmails:[],days1:90,days2:60,days3:30,days4:7,templates:JSON.parse(JSON.stringify(DEF_TMPLS))},
+        result.settings
+      );
+      if(!db.settings.templates || db.settings.templates.length < 4)
+        db.settings.templates = JSON.parse(JSON.stringify(DEF_TMPLS));
+    }
+    lsSet(CACHE_KEY, db);
+    // Also save to backup storage whenever we get a good load
+    if(db.documents.length > 0) autoBackupToStorage();
+    setSyncStatus('ok','Synced · '+new Date().toLocaleTimeString());
+    return true;
+  } catch(e) {
+    setSyncStatus('err','Load failed: '+e.message);
+    console.error('Load error:', e);
+    return false;
+  }
+}
+
+async function saveToSheets(){
+  setSyncStatus('busy','Saving…');
+  try {
+    // Split into chunks if needed — large payloads (file attachments) can hit URL limits
+    // Save metadata first (fast), then handle files separately if large
+    const payload = buildSavePayload();
+    const result = await gasGet('saveAll', payload);
+    if(result && result.error) throw new Error(result.error);
+    if(!result || (!result.success && !result.savedAt)) throw new Error('Unexpected response: '+JSON.stringify(result));
+    lsSet(CACHE_KEY, db);
+    autoBackupToStorage(); // always backup locally after successful save
+    setSyncStatus('ok','Saved · '+new Date().toLocaleTimeString());
+  } catch(e) {
+    setSyncStatus('err','Save failed: '+e.message);
+    console.error('Save error:', e);
+    showSaveError(e.message);
+  }
+}
+
+function buildSavePayload(){
+  // Deep clone to avoid mutating db
+  return JSON.parse(JSON.stringify(db));
+}
+
+function showSaveError(msg){
+  // Only alert if it hasn't been shown recently (avoid spam)
+  if(window._lastSaveErrTime && Date.now()-window._lastSaveErrTime < 30000) return;
+  window._lastSaveErrTime = Date.now();
+  const friendly = msg.includes('HTML error page')
+    ? 'The Apps Script deployment may need to be re-deployed. Go to Extensions > Apps Script > Deploy > Manage deployments, then create a new version.'
+    : msg.includes('Failed to fetch') || msg.includes('NetworkError')
+    ? 'No internet connection. Your data is cached locally and will sync when you reconnect.'
+    : 'Save error: '+msg+'\n\nTip: Make sure your Apps Script is deployed with access set to "Anyone".';
+  console.warn('Save error detail:', msg);
+  // Show non-blocking notification instead of alert
+  showToast(friendly, 'error');
+}
+
+function showToast(msg, type){
+  let t = document.getElementById('toast');
+  if(!t){
+    t=document.createElement('div');
+    t.id='toast';
+    t.style.cssText='position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);padding:10px 18px;border-radius:8px;font-size:13px;max-width:480px;text-align:center;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.15);transition:opacity .3s';
+    document.body.appendChild(t);
+  }
+  const isError = type==='error';
+  const isOk    = type==='ok';
+  t.style.background = isError ? '#fcebeb' : isOk ? '#eaf3de' : '#e6f1fb';
+  t.style.color      = isError ? '#791f1f' : isOk ? '#27500a' : '#0c447c';
+  t.style.border     = '0.5px solid '+(isError?'#f09595':isOk?'#97c459':'#85b7eb');
+  t.textContent = msg;
+  t.style.opacity='1';
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>{ t.style.opacity='0'; }, isError ? 8000 : 4000);
+}
+
+// ─── BACKUP KEY ──────────────────────────────────────────────
+const BACKUP_KEY = 'gentuna_fip_backup';
+const AUTO_BACKUP_INTERVAL = 5; // auto-backup every N saves
+
+let saveCount = 0;
+
+function scheduleSave(){
+  lsSet(CACHE_KEY, db);
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async ()=>{
+    await saveToSheets();
+    // Auto-backup to browser storage after every N saves
+    saveCount++;
+    if(saveCount >= AUTO_BACKUP_INTERVAL){
+      saveCount = 0;
+      autoBackupToStorage();
+    }
+  }, 1500);
+}
+
+// Save a full JSON snapshot to localStorage as a safety net
+function autoBackupToStorage(){
+  try {
+    const backup = { savedAt: new Date().toISOString(), data: JSON.parse(JSON.stringify(db)) };
+    lsSet(BACKUP_KEY, backup);
+    const lbl = document.getElementById('last-backup-label');
+    if(lbl) lbl.textContent = 'Backup: '+new Date().toLocaleTimeString();
+  } catch(e){ console.warn('Auto-backup failed', e); }
+}
+
+// Manual backup — downloads a .json file the user keeps
+function manualBackup(){
+  try {
+    const backup = {
+      version: 'gentuna_fip_v8',
+      savedAt: new Date().toISOString(),
+      data: JSON.parse(JSON.stringify(db))
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const date = new Date().toISOString().slice(0,10);
+    a.download = 'GENTUNA_FIP_Backup_'+date+'.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast('Backup downloaded successfully.', 'ok');
+  } catch(e){
+    showToast('Backup failed: '+e.message, 'error');
+  }
+}
+
+// Import from either a .json backup or an .xlsx export
+function importBackup(input){
+  const file = input.files[0];
+  if(!file) return;
+  input.value = ''; // reset so same file can be re-selected
+
+  if(file.name.endsWith('.json')){
+    importFromJSON(file);
+  } else if(file.name.endsWith('.xlsx')){
+    importFromExcel(file);
+  } else {
+    showToast('Please select a .json backup file or a .xlsx export file.', 'error');
+  }
+}
+
+function importFromJSON(file){
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      // Support both raw db object and wrapped backup format
+      const data = parsed.data || parsed;
+      if(!data.documents && !data.companies){
+        showToast('This file does not look like a valid GENTUNA FIP backup.', 'error');
+        return;
+      }
+      if(!confirm('This will replace ALL current data with the backup. Continue?')) return;
+      if(data.documents !== undefined) db.documents = data.documents;
+      if(data.companies !== undefined) db.companies = data.companies;
+      if(data.licTypes  !== undefined) db.licTypes  = data.licTypes;
+      if(data.vTypes    !== undefined) db.vTypes    = data.vTypes;
+      if(data.settings  !== undefined) db.settings  = Object.assign(db.settings, data.settings);
+      scheduleSave();
+      renderAll();
+      applySettings();
+      showToast('Backup restored successfully! Data saved to Google Sheets.', 'ok');
+    } catch(err){
+      showToast('Could not read backup file: '+err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function importFromExcel(file){
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+
+      // Read Documents sheet
+      const docsSheet = wb.Sheets['Documents'];
+      if(!docsSheet){ showToast('No "Documents" sheet found in this Excel file.', 'error'); return; }
+      const rows = XLSX.utils.sheet_to_json(docsSheet);
+      if(!rows.length){ showToast('No document rows found in the Excel file.', 'error'); return; }
+
+      if(!confirm('Import '+rows.length+' documents from this Excel file? This will REPLACE all current documents. Companies and settings will be kept. Continue?')) return;
+
+      // Map Excel columns back to db fields
+      db.documents = rows.map(r => ({
+        id: uid(),
+        company:  r['Company']      || '',
+        vessel:   r['Vessel']       || '',
+        vtype:    r['Vessel type']  || '',
+        type:     r['License type'] || '',
+        num:      r['License number'] || '',
+        agency:   r['Issuing agency'] || '',
+        issued:   r['Issue date']   || '',
+        expiry:   r['Expiry date'] === 'No expiry' ? '' : (r['Expiry date'] || ''),
+        noExpiry: r['Expiry date'] === 'No expiry',
+        link:     r['Reference link'] || '',
+        notes:    r['Notes']        || '',
+        fileData: null, fileName: null, fileType: null,
+        history:  []
+      })).filter(d => d.company && d.num);
+
+      // Also read Companies sheet if present
+      const coSheet = wb.Sheets['Companies'];
+      if(coSheet){
+        const coRows = XLSX.utils.sheet_to_json(coSheet);
+        const importedCos = coRows.map(r => ({
+          id: uid(),
+          name:    r['Company']  || '',
+          contact: r['Contact']  || '',
+          emails:  r['Emails'] ? String(r['Emails']).split(',').map(s=>s.trim()).filter(Boolean) : [],
+          vessels: r['Vessels'] ? String(r['Vessels']).split(',').map(s=>s.trim()).filter(Boolean) : [],
+          phone:   r['Phone']   || '',
+          notes:   ''
+        })).filter(c => c.name);
+        if(importedCos.length) db.companies = importedCos;
+      }
+
+      scheduleSave();
+      renderAll();
+      showToast('Imported '+db.documents.length+' documents successfully! Note: file attachments are not included in Excel imports.', 'ok');
+    } catch(err){
+      showToast('Could not read Excel file: '+err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function syncNow(){
+  await saveToSheets();
+  await loadFromSheets();
+  renderAll();
+}
+
+// ─── SETUP & CONNECT ──────────────────────────────────────────
+async function connectSheet(){
+  const url = document.getElementById('setup-url').value.trim();
+  if(!url || !url.includes('script.google.com')){
+    showSetupError('Please enter a valid Google Apps Script URL.');
+    return;
+  }
+  showLoading('Testing connection…');
+  try {
+    const res = await fetch(url+'?action=loadAll');
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    if(data.error && !data.documents) throw new Error(data.error);
+    API_URL = url;
+    lsSet(CONFIG_KEY, {apiUrl:url});
+    hideLoading();
+    startApp();
+  } catch(e){
+    hideLoading();
+    showSetupError('Could not connect. Check the URL and make sure the deployment is set to "Anyone". Error: '+e.message);
+  }
+}
+
+function disconnectSheet(){
+  if(!confirm('Disconnect from Google Sheets? Your local cache will be cleared.')) return;
+  localStorage.removeItem(CONFIG_KEY);
+  localStorage.removeItem(CACHE_KEY);
+  location.reload();
+}
+
+function showSetupError(msg){
+  const el=document.getElementById('setup-error');
+  if(el){el.textContent=msg;el.style.display='block';}
+}
+
+function showLoading(msg){
+  document.getElementById('loading-overlay').style.display='flex';
+  document.getElementById('loading-msg').textContent=msg||'Loading…';
+}
+function hideLoading(){
+  document.getElementById('loading-overlay').style.display='none';
+}
+
+async function init(){
+  const config = lsGet(CONFIG_KEY);
+  if(!config || !config.apiUrl){
+    hideLoading();
+    document.getElementById('setup-screen').style.display='flex';
+    return;
+  }
+  API_URL = config.apiUrl;
+  // Load from cache first for instant display
+  const cached = lsGet(CACHE_KEY);
+  if(cached){
+    if(cached.documents) db.documents = cached.documents;
+    if(cached.companies) db.companies = cached.companies;
+    if(cached.licTypes && cached.licTypes.length) db.licTypes = cached.licTypes;
+    if(cached.vTypes   && cached.vTypes.length)   db.vTypes   = cached.vTypes;
+    if(cached.settings) db.settings = Object.assign(db.settings, cached.settings);
+  }
+  startApp();
+  // Then refresh from Sheets in background
+  await loadFromSheets();
+  renderAll();
+}
+
+function startApp(){
+  hideLoading();
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('app').style.display='flex';
+  applySettings();
+  renderAll();
+  // Show last backup time if available
+  const lb = lsGet(BACKUP_KEY);
+  const lbl = document.getElementById('last-backup-label');
+  if(lb && lb.savedAt && lbl){
+    lbl.textContent = 'Backup: '+new Date(lb.savedAt).toLocaleString();
+  }
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
+function fmtDate(d){if(!d||d==='')return'—';try{return new Date(String(d).slice(0,10)+'T00:00:00').toLocaleDateString('en-PH',{year:'numeric',month:'short',day:'numeric'});}catch(e){return String(d);}}
+function daysLeft(e){return Math.ceil((new Date(String(e).slice(0,10)+'T00:00:00')-new Date())/864e5);}
+function getStatus(l){if(l.noExpiry===true||l.noExpiry==='TRUE'||!l.expiry||l.expiry==='')return'noexpiry';const d=daysLeft(l.expiry);if(d<0)return'expired';if(d<=90)return'expiring';return'active';}
+function statusLabel(s){return{active:'Active',expiring:'Expiring soon',expired:'Expired',noexpiry:'No expiry'}[s]||s;}
+function getTmplIdx(dl){const s=db.settings;if(dl<=(s.days4||7))return 3;if(dl<=(s.days3||30))return 2;if(dl<=(s.days2||60))return 1;return 0;}
+function fillTmpl(tmpl,l){const dl=(!l.expiry||l.noExpiry)?'N/A':(daysLeft(l.expiry)<0?'OVERDUE':daysLeft(l.expiry)+' days');return tmpl.replace(/{{company}}/g,l.company||'').replace(/{{vessel}}/g,l.vessel||'').replace(/{{license_type}}/g,l.type||'').replace(/{{license_num}}/g,l.num||'').replace(/{{expiry_date}}/g,fmtDate(l.expiry)).replace(/{{days_left}}/g,dl);}
+function escH(s){return(String(s||'')).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function getVesselsForCompany(n){const co=db.companies.find(c=>c.name===n);return co?(co.vessels||[]):[];}
+function getVesselDocStatus(v,c){const vl=db.documents.filter(l=>l.vessel===v&&l.company===c);const has=new Set(vl.map(l=>l.type));const miss=db.licTypes.filter(t=>!has.has(t));if(miss.length===0)return'complete';if(miss.length===db.licTypes.length)return'missing';return'partial';}
+function getVesselCounts(v,c){const vl=db.documents.filter(l=>l.vessel===v&&l.company===c);const has=new Set(vl.map(l=>l.type));return{have:db.licTypes.filter(t=>has.has(t)).length,total:db.licTypes.length};}
+
+// ─── TABS ─────────────────────────────────────────────────────
+function switchTab(tab){
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.querySelector(`.nav-item[data-tab="${tab}"]`).classList.add('active');
+  renderAll();
+}
+document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
+
+// ─── RENDER ───────────────────────────────────────────────────
+function renderAll(){renderMetrics();renderDash();buildDocHead();renderDocs();renderTracker();renderCompanies();renderReminders();renderSettings();}
+
+function renderMetrics(){
+  const docs=db.documents,total=docs.length,active=docs.filter(l=>getStatus(l)==='active').length,exp90=docs.filter(l=>getStatus(l)==='expiring').length,expired=docs.filter(l=>getStatus(l)==='expired').length;
+  const vkeys=[...new Set(docs.map(l=>l.vessel+'|||'+l.company).filter(k=>k!=='|||'))];
+  const miss=vkeys.filter(k=>{const[v,c]=k.split('|||');return getVesselDocStatus(v,c)!=='complete';}).length;
+  document.getElementById('metrics').innerHTML=`<div class="metric"><div class="metric-val">${total}</div><div class="metric-lbl">Total documents</div></div><div class="metric"><div class="metric-val" style="color:var(--green)">${active}</div><div class="metric-lbl">Active</div></div><div class="metric"><div class="metric-val" style="color:var(--amber)">${exp90}</div><div class="metric-lbl">Expiring ≤90 days</div></div><div class="metric"><div class="metric-val" style="color:var(--red)">${expired}</div><div class="metric-lbl">Expired</div></div><div class="metric"><div class="metric-val" style="color:var(--red)">${miss}</div><div class="metric-lbl">Vessels w/ missing docs</div></div>`;
+}
+
+function renderDash(){
+  const bad=db.documents.filter(l=>getStatus(l)==='expiring'||getStatus(l)==='expired');
+  document.getElementById('alert-area').innerHTML=bad.length?`<div class="alert"><i class="ti ti-alert-triangle"></i>${bad.length} document(s) expired or expiring within 90 days.</div>`:'';
+  const rows=db.documents.filter(l=>getStatus(l)==='expiring'||getStatus(l)==='expired').sort((a,b)=>new Date(a.expiry)-new Date(b.expiry)).slice(0,15);
+  const tb=document.getElementById('dash-tbody');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="empty">No upcoming expirations</td></tr>';return;}
+  tb.innerHTML=rows.map(l=>{const st=getStatus(l);const dl=daysLeft(l.expiry);return`<tr><td title="${escH(l.company)}">${escH(l.company)}</td><td>${escH(l.vessel||'—')}</td><td>${escH(l.vtype||'—')}</td><td>${escH(l.type)}</td><td>${fmtDate(l.expiry)}</td><td style="font-weight:700;color:${dl<0?'var(--red)':dl<=30?'var(--red)':'var(--amber)'}">${dl<0?'Overdue':dl+'d'}</td><td><span class="badge ${st}">${statusLabel(st)}</span></td></tr>`;}).join('');
+}
+
+function populateDocFilters(){
+  const cos=[...new Set(db.documents.map(l=>l.company).filter(Boolean))].sort();
+  const fc=document.getElementById('s-company');if(fc){const cv=fc.value;fc.innerHTML='<option value="">All companies</option>'+cos.map(c=>`<option value="${escH(c)}">${escH(c)}</option>`).join('');fc.value=cv;}
+  const fcv=document.getElementById('s-company')?document.getElementById('s-company').value:'';
+  const vessels=getFilteredVesselList(fcv);
+  const fv=document.getElementById('s-vessel');if(fv){const cv=fv.value;fv.innerHTML='<option value="">All vessels</option>'+vessels.map(v=>`<option value="${escH(v)}">${escH(v)}</option>`).join('');fv.value=cv;}
+  const fvt=document.getElementById('s-vtype');if(fvt){const cv=fvt.value;const vt=[...new Set([...db.vTypes,...db.documents.map(l=>l.vtype).filter(Boolean)])].sort();fvt.innerHTML='<option value="">All vessel types</option>'+vt.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');fvt.value=cv;}
+  const ft=document.getElementById('s-type');if(ft){const cv=ft.value;ft.innerHTML='<option value="">All license types</option>'+db.licTypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');ft.value=cv;}
+  const svc=document.getElementById('sv-company');if(svc){const cv=svc.value;svc.innerHTML='<option value="">All companies</option>'+cos.map(c=>`<option value="${escH(c)}">${escH(c)}</option>`).join('');svc.value=cv;}
+  const svvt=document.getElementById('sv-vtype');if(svvt){const cv=svvt.value;const vt=[...new Set([...db.vTypes,...db.documents.map(l=>l.vtype).filter(Boolean)])].sort();svvt.innerHTML='<option value="">All vessel types</option>'+vt.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');svvt.value=cv;}
+}
+
+function getFilteredVesselList(coFilter){
+  if(coFilter){const co=db.companies.find(c=>c.name===coFilter);if(co&&co.vessels&&co.vessels.length)return co.vessels;return[...new Set(db.documents.filter(l=>l.company===coFilter).map(l=>l.vessel).filter(Boolean))].sort();}
+  return[...new Set(db.documents.map(l=>l.vessel).filter(Boolean))].sort();
+}
+function onCompanyFilter(){
+  const fc=document.getElementById('s-company').value;
+  const fv=document.getElementById('s-vessel');if(!fv)return;
+  fv.innerHTML='<option value="">All vessels</option>'+getFilteredVesselList(fc).map(v=>`<option value="${escH(v)}">${escH(v)}</option>`).join('');
+  renderDocs();
+}
+function buildDocHead(){
+  const tr=document.getElementById('doc-thead');if(!tr)return;
+  tr.innerHTML=DOC_COLS.map(c=>{const isSorted=sortCol===c.key;return`<th style="width:${c.w}" class="${isSorted?'sorted':''}" ${c.nosort?'':`onclick="sortBy('${c.key}')"`}>${c.nosort?c.label:`${c.label} <span class="si">${isSorted?(sortDir===1?'▲':'▼'):'⇅'}</span>`}</th>`;}).join('');
+}
+function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}buildDocHead();renderDocRows();}
+function renderDocs(){populateDocFilters();renderDocRows();}
+function getFilteredDocs(){
+  const q=(document.getElementById('s-search').value||'').toLowerCase();
+  const fc=document.getElementById('s-company').value,fv=document.getElementById('s-vessel').value,fvt=document.getElementById('s-vtype').value,ft=document.getElementById('s-type').value,fs=document.getElementById('s-status').value;
+  return db.documents.filter(l=>{const mq=!q||(l.num||'').toLowerCase().includes(q)||(l.vessel||'').toLowerCase().includes(q)||(l.company||'').toLowerCase().includes(q)||(l.type||'').toLowerCase().includes(q);return mq&&(!fc||l.company===fc)&&(!fv||l.vessel===fv)&&(!fvt||l.vtype===fvt)&&(!ft||l.type===ft)&&(!fs||getStatus(l)===fs);});
+}
+function renderDocRows(){
+  let rows=[...getFilteredDocs()];
+  rows.sort((a,b)=>{if(sortCol==='expiry')return(new Date(a.expiry||'9999')-new Date(b.expiry||'9999'))*sortDir;if(sortCol==='status'){const o={expired:0,expiring:1,active:2,noexpiry:3};return(o[getStatus(a)]-o[getStatus(b)])*sortDir;}return((a[sortCol]||'').toString().localeCompare((b[sortCol]||'').toString()))*sortDir;});
+  const tb=document.getElementById('doc-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="${DOC_COLS.length}" class="empty">No documents found</td></tr>`;return;}
+  tb.innerHTML=rows.map(l=>{
+    const st=getStatus(l);const hc=(l.history||[]).length;
+    const hb=hc?`<span style="background:var(--purple-bg);color:var(--purple);font-size:9px;padding:1px 5px;border-radius:10px;margin-left:3px;font-weight:700">${hc}v</span>`:'';
+    const fb=l.fileData?`<button class="ib" onclick="viewFile('${l.id}')" title="Download"><i class="ti ti-file"></i></button>`:`<span style="color:var(--text3);font-size:10px">—</span>`;
+    const lb=l.link?`<a href="${escH(l.link)}" target="_blank" style="color:var(--blue)"><i class="ti ti-external-link" style="font-size:13px"></i></a>`:`<span style="color:var(--text3);font-size:10px">—</span>`;
+    return`<tr><td title="${escH(l.company)}">${escH(l.company)}</td><td title="${escH(l.vessel||'')}">${escH(l.vessel||'—')}</td><td>${escH(l.vtype||'—')}</td><td title="${escH(l.type)}">${escH(l.type)}</td><td>${escH(l.num)}${hb}</td><td>${l.noExpiry===true||l.noExpiry==='TRUE'?'—':fmtDate(l.expiry)}</td><td><span class="badge ${st}">${statusLabel(st)}</span></td><td>${fb}</td><td>${lb}</td><td><div class="act-btns"><button class="ib" onclick="editDoc('${l.id}')" title="Edit/renew"><i class="ti ti-edit"></i></button><button class="ib" onclick="sendReminderDoc('${l.id}',${getTmplIdx(l.noExpiry?9999:daysLeft(l.expiry))})" title="Send reminder"><i class="ti ti-mail"></i></button><button class="ib d" onclick="delDoc('${l.id}')" title="Delete"><i class="ti ti-trash"></i></button></div></td></tr>`;
+  }).join('');
+}
+
+function renderTracker(){
+  populateDocFilters();
+  const fc=document.getElementById('sv-company').value,fvt=document.getElementById('sv-vtype').value,fds=document.getElementById('sv-docs').value;
+  const vesselMap={};
+  db.documents.forEach(l=>{if(!l.vessel)return;const key=l.vessel+'|||'+l.company;if(!vesselMap[key])vesselMap[key]={vessel:l.vessel,company:l.company,vtype:l.vtype||'',docs:[]};vesselMap[key].docs.push(l);if(l.vtype)vesselMap[key].vtype=l.vtype;});
+  db.companies.forEach(co=>{(co.vessels||[]).forEach(v=>{const key=v+'|||'+co.name;if(!vesselMap[key])vesselMap[key]={vessel:v,company:co.name,vtype:'',docs:[]};});});
+  let entries=Object.values(vesselMap);
+  if(fc)entries=entries.filter(e=>e.company===fc);if(fvt)entries=entries.filter(e=>e.vtype===fvt);if(fds)entries=entries.filter(e=>getVesselDocStatus(e.vessel,e.company)===fds);
+  const el=document.getElementById('tracker-list');
+  if(!entries.length){el.innerHTML='<div class="empty">No vessels found. Add companies with vessels, or add documents.</div>';return;}
+  el.innerHTML=entries.map(e=>{
+    const ds=getVesselDocStatus(e.vessel,e.company);const{have,total}=getVesselCounts(e.vessel,e.company);const pct=total>0?Math.round(have/total*100):0;const pColor=pct===100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';const hasTypes=new Set(e.docs.map(l=>l.type));
+    const docItems=db.licTypes.map(t=>{const ex=e.docs.find(l=>l.type===t);const hasCls=hasTypes.has(t)?'has':'missing';const icon=hasTypes.has(t)?'ti-circle-check':'ti-circle-plus';const info=ex?` <span style="opacity:.7;font-size:10px">· ${escH(ex.num)}${!ex.noExpiry&&ex.expiry?' · '+fmtDate(ex.expiry):''}</span>`:'';return`<div class="doc-item ${hasCls}" onclick="openAddForVesselType('${escH(e.company)}','${escH(e.vessel)}','${escH(e.vtype)}','${escH(t)}')" title="${hasCls==='missing'?'Click to add':'Click to edit'}"><i class="ti ${icon}"></i><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escH(t)}${info}</span></div>`;}).join('');
+    return`<div class="vessel-card"><div class="vessel-hdr"><div><div class="vessel-name"><i class="ti ti-ship"></i> ${escH(e.vessel)}</div><div class="vessel-meta">${escH(e.company)} · ${escH(e.vtype||'—')}</div></div><div style="text-align:right"><span class="badge ${ds==='complete'?'complete':ds==='partial'?'partial':'missing'}">${ds.charAt(0).toUpperCase()+ds.slice(1)}</span><div style="font-size:11px;color:var(--text2);margin-top:4px">${have} / ${total} documents</div></div></div><div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${pColor}"></div></div><span style="font-size:12px;font-weight:700;color:${pColor};min-width:36px">${pct}%</span></div><div class="doc-grid">${docItems}</div></div>`;
+  }).join('');
+}
+
+function onTrackerCompanyFilter(){renderTracker();}
+
+function openAddForVesselType(company,vessel,vtype,licType){
+  const existing=db.documents.find(l=>l.company===company&&l.vessel===vessel&&l.type===licType);
+  if(existing){editDoc(existing.id);return;}
+  openAdd();
+  setTimeout(()=>{document.getElementById('f-company').value=company;onFormCompanyChange();setTimeout(()=>{const vs=document.getElementById('f-vessel-sel');if(vs)vs.value=vessel;document.getElementById('f-vtype').value=vtype;document.getElementById('f-ltype').value=licType;},60);},60);
+}
+
+function renderCompanies(){
+  const el=document.getElementById('co-list');
+  if(!db.companies.length){el.innerHTML='<div class="empty">No companies yet.</div>';return;}
+  el.innerHTML=db.companies.map(co=>{
+    const dc=db.documents.filter(l=>l.company===co.name).length;
+    const vl=(co.vessels||[]).map(v=>`<span class="etag" style="margin:2px">${escH(v)}</span>`).join('');
+    const em=(co.emails||[]).map(e=>`<span class="etag" style="margin:2px">${escH(e)}</span>`).join('');
+    return`<div class="card" style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start"><div><div style="font-size:14px;font-weight:700;margin-bottom:3px">${escH(co.name)}</div><div style="font-size:11px;color:var(--text2);margin-bottom:6px">${escH(co.contact||'—')} · ${escH(co.phone||'—')}</div><div style="margin-bottom:5px">${em||'<span style="font-size:11px;color:var(--text2)">No emails</span>'}</div><div style="margin-bottom:5px">${vl||'<span style="font-size:11px;color:var(--text2)">No vessels</span>'}</div><div style="font-size:11px;color:var(--text2)">${(co.vessels||[]).length} vessel(s) · ${dc} document(s)</div></div><div style="display:flex;gap:5px"><button class="ib" onclick="editCo('${co.id}')"><i class="ti ti-edit"></i></button><button class="ib d" onclick="delCo('${co.id}')"><i class="ti ti-trash"></i></button></div></div>`;
+  }).join('');
+}
+
+function renderReminders(){
+  renderAdminEmailTags();renderTmplForms();
+  const d1=db.settings.days1||90;
+  const urgent=db.documents.filter(l=>{if(l.noExpiry===true||l.noExpiry==='TRUE'||!l.expiry)return false;return daysLeft(l.expiry)<=d1;}).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
+  const el=document.getElementById('reminder-list');
+  if(!urgent.length){el.innerHTML='<div class="empty">No documents require reminders right now.</div>';return;}
+  el.innerHTML=urgent.map(l=>{const dl=daysLeft(l.expiry);const st=getStatus(l);const co=db.companies.find(c=>c.name===l.company);const ae=[...(db.settings.adminEmails||[]),...(co?.emails||[])];const ti=getTmplIdx(dl);return`<div class="card" style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start"><div><div style="font-size:13px;font-weight:700">${escH(l.company)} — ${escH(l.vessel||'—')}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${escH(l.type)} · ${escH(l.num)} · Expires: ${fmtDate(l.expiry)}</div><div style="font-size:11px;margin-top:4px;font-weight:700;color:${dl<0?'var(--red)':dl<=7?'var(--red)':dl<=30?'var(--amber)':'var(--blue)'}">${dl<0?'Overdue by '+Math.abs(dl)+' days':dl+' days remaining'}</div><div style="font-size:10px;color:var(--text2);margin-top:3px">Notify: ${ae.length?ae.join(', '):'No emails configured'} · ${(db.settings.templates||DEF_TMPLS)[ti]?.label}</div></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="badge ${st}">${statusLabel(st)}</span><button class="btn sm" onclick="sendReminderDoc('${l.id}',${ti})"><i class="ti ti-mail"></i> Send</button></div></div>`;}).join('');
+}
+function renderAdminEmailTags(){const c=document.getElementById('admin-email-tags');if(!c)return;c.innerHTML=(db.settings.adminEmails||[]).map(e=>`<span class="etag">${escH(e)}<button onclick="removeAdminEmail(${JSON.stringify(e)})">×</button></span>`).join('');}
+function addAdminEmail(){const v=document.getElementById('new-admin-email').value.trim();if(!v)return;if(!db.settings.adminEmails.includes(v)){db.settings.adminEmails.push(v);scheduleSave();renderAdminEmailTags();}document.getElementById('new-admin-email').value='';}
+function removeAdminEmail(e){db.settings.adminEmails=db.settings.adminEmails.filter(x=>x!==e);scheduleSave();renderAdminEmailTags();}
+function renderTmplForms(){const el=document.getElementById('tmpl-forms');if(!el)return;const t=db.settings.templates||DEF_TMPLS;el.innerHTML=t.map((t,i)=>`<div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:0.5px solid var(--border)"><div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">${escH(t.label)}</div><div class="fr"><label>Subject</label><input id="tmpl-subj-${i}" value="${escH(t.subject)}" oninput="saveTmpl(${i})" style="font-size:12px"></div><div class="fr"><label>Body</label><textarea id="tmpl-body-${i}" oninput="saveTmpl(${i})" class="tmpl-area">${escH(t.body)}</textarea></div></div>`).join('');}
+function saveTmpl(i){db.settings.templates[i].subject=document.getElementById('tmpl-subj-'+i).value;db.settings.templates[i].body=document.getElementById('tmpl-body-'+i).value;scheduleSave();}
+function saveSettings(){['d1','d2','d3','d4'].forEach((k,j)=>{const el=document.getElementById('rem-'+k);if(el)db.settings['days'+(j+1)]=parseInt(el.value)||[90,60,30,7][j];});scheduleSave();}
+function applySettings(){['d1','d2','d3','d4'].forEach((k,j)=>{const el=document.getElementById('rem-'+k);if(el)el.value=db.settings['days'+(j+1)]||[90,60,30,7][j];});}
+function sendReminderDoc(id,ti){const l=db.documents.find(x=>x.id===id);if(!l)return;const co=db.companies.find(c=>c.name===l.company);const ae=[...(db.settings.adminEmails||[]),...(co?.emails||[])];const t=(db.settings.templates||DEF_TMPLS)[ti]||DEF_TMPLS[0];window.open('mailto:'+ae.join(',')+'?subject='+encodeURIComponent(fillTmpl(t.subject,l))+'&body='+encodeURIComponent(fillTmpl(t.body,l)));}
+
+function renderSettings(){
+  const ltl=document.getElementById('lic-types-list');if(ltl)ltl.innerHTML=db.licTypes.map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:0.5px solid var(--border);border-radius:var(--radius);margin-bottom:5px;font-size:12px"><span style="flex:1">${escH(t)}</span><button class="ib d" onclick="removeLicType(${JSON.stringify(t)})"><i class="ti ti-trash"></i></button></div>`).join('');
+  const vtl=document.getElementById('vtype-tags');if(vtl)vtl.innerHTML=db.vTypes.map(t=>`<span class="etag">${escH(t)}<button onclick="removeVType(${JSON.stringify(t)})">×</button></span>`).join('');
+}
+function addLicType(){const v=document.getElementById('new-lic-type').value.trim();if(!v)return;if(!db.licTypes.includes(v)){db.licTypes.push(v);scheduleSave();renderSettings();}document.getElementById('new-lic-type').value='';}
+function removeLicType(t){if(confirm('Remove "'+t+'"?')){db.licTypes=db.licTypes.filter(x=>x!==t);scheduleSave();renderSettings();renderTracker();}}
+function addVType(){const v=document.getElementById('new-vtype').value.trim();if(!v)return;if(!db.vTypes.includes(v)){db.vTypes.push(v);scheduleSave();renderSettings();}document.getElementById('new-vtype').value='';}
+function removeVType(t){db.vTypes=db.vTypes.filter(x=>x!==t);scheduleSave();renderSettings();}
+
+// ─── DOCUMENT FORM ────────────────────────────────────────────
+function openAdd(){
+  editDocId=null;pendingFile=null;
+  document.getElementById('doc-modal-title').textContent='Add document';
+  populateDocForm(null);
+  document.getElementById('hist-section').style.display='none';
+  const bg=document.getElementById('doc-modal-bg');
+  bg.classList.remove('hidden');
+  bg.scrollTop=0;
+}
+function closeDocModal(){
+  const bg=document.getElementById('doc-modal-bg');
+  bg.classList.add('hidden');
+  editDocId=null;
+  pendingFile=null;
+}
+function toggleExpiry(){const c=document.getElementById('f-noexpiry').checked;document.getElementById('f-expiry').disabled=c;if(c)document.getElementById('f-expiry').value='';}
+function populateDocForm(l){
+  document.getElementById('f-company').innerHTML='<option value="">Select company...</option>'+db.companies.map(c=>`<option value="${escH(c.name)}">${escH(c.name)}</option>`).join('');
+  document.getElementById('f-vtype').innerHTML='<option value="">Select...</option>'+db.vTypes.map(t=>`<option>${escH(t)}</option>`).join('');
+  document.getElementById('f-ltype').innerHTML='<option value="">Select...</option>'+db.licTypes.map(t=>`<option>${escH(t)}</option>`).join('');
+  if(l){
+    document.getElementById('f-company').value=l.company||'';populateVesselDropdown(l.company,l.vessel);
+    document.getElementById('f-vtype').value=l.vtype||'';document.getElementById('f-ltype').value=l.type||'';
+    document.getElementById('f-num').value=l.num||'';document.getElementById('f-agency').value=l.agency||'';
+    document.getElementById('f-issued').value=l.issued||'';document.getElementById('f-expiry').value=l.expiry||'';
+    document.getElementById('f-noexpiry').checked=l.noExpiry===true||l.noExpiry==='TRUE';
+    document.getElementById('f-expiry').disabled=l.noExpiry===true||l.noExpiry==='TRUE';
+    document.getElementById('f-link').value=l.link||'';document.getElementById('f-notes').value=l.notes||'';
+    document.getElementById('f-file-preview').innerHTML=l.fileData?`<div class="fbadge"><i class="ti ti-file"></i>${escH(l.fileName||'File')}<button style="background:none;border:none;cursor:pointer;color:var(--red);margin-left:6px" onclick="pendingFile=null;this.parentElement.remove()">×</button></div>`:'';
+    pendingFile=l.fileData?{data:l.fileData,name:l.fileName,type:l.fileType}:null;
+  } else {
+    ['f-num','f-agency','f-notes','f-link'].forEach(id=>document.getElementById(id).value='');
+    ['f-issued','f-expiry'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('f-noexpiry').checked=false;document.getElementById('f-expiry').disabled=false;
+    document.getElementById('f-file-preview').innerHTML='';populateVesselDropdown('','');
+  }
+}
+function populateVesselDropdown(company,sel){
+  const vs=document.getElementById('f-vessel-sel');const vessels=company?getVesselsForCompany(company):[];
+  vs.innerHTML='<option value="">Select vessel...</option>'+vessels.map(v=>`<option value="${escH(v)}">${escH(v)}</option>`).join('');
+  if(sel)vs.value=sel;
+}
+function onFormCompanyChange(){populateVesselDropdown(document.getElementById('f-company').value,'');}
+
+function editDoc(id){
+  editDocId=id;const l=db.documents.find(x=>x.id===id);
+  document.getElementById('doc-modal-title').textContent='Edit / renew document';
+  populateDocForm(l);
+  const hist=l.history||[];const hs=document.getElementById('hist-section');const hl=document.getElementById('hist-list');
+  if(hist.length){
+    hs.style.display='block';
+    hl.innerHTML=hist.slice().reverse().map((h,ri)=>{
+      const ai=hist.length-1-ri;
+      return`<div class="hist-item" id="hist-item-${id}-${ai}">
+        <div class="hist-item-hdr">
+          <div><div style="font-size:12px;font-weight:700">${escH(h.num||'—')}</div>
+          <div class="hist-meta">Issued: ${fmtDate(h.issued)} · Expiry: ${fmtDate(h.expiry)} · Saved: ${fmtDate(h.savedAt)}</div>
+          ${h.link?`<div class="hist-meta"><a href="${escH(h.link)}" target="_blank">Reference link ↗</a></div>`:''}
+          ${h.notes?`<div class="hist-meta">${escH(h.notes)}</div>`:''}
+          </div>
+          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+            ${h.fileData?`<button class="ib" onclick="dlHist('${id}',${ai})" title="Download old file"><i class="ti ti-file"></i></button>`:''}
+            <button class="ib" onclick="toggleHistEdit('${id}',${ai})" title="Edit this version"><i class="ti ti-edit"></i></button>
+          </div>
+        </div>
+        <div class="hist-edit-form" id="hist-edit-${id}-${ai}">
+          <div class="fr-row">
+            <div class="fr"><label>License number</label><input id="he-num-${ai}" value="${escH(h.num||'')}" style="font-size:12px"></div>
+            <div class="fr"><label>Issuing agency</label><input id="he-agency-${ai}" value="${escH(h.agency||'')}" style="font-size:12px"></div>
+          </div>
+          <div class="fr-row">
+            <div class="fr"><label>Issue date</label><input type="date" id="he-issued-${ai}" value="${h.issued||''}" style="font-size:12px"></div>
+            <div class="fr"><label>Expiry date</label><input type="date" id="he-expiry-${ai}" value="${h.expiry||''}" style="font-size:12px"></div>
+          </div>
+          <div class="fr"><label>Reference link</label><input type="url" id="he-link-${ai}" value="${escH(h.link||'')}" placeholder="https://..." style="font-size:12px"></div>
+          <div class="fr"><label>Notes</label><textarea id="he-notes-${ai}" style="font-size:12px;min-height:44px">${escH(h.notes||'')}</textarea></div>
+          <div class="fr"><label>Replace file</label>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${h.fileData?`<span class="fbadge"><i class="ti ti-file"></i>${escH(h.fileName||'Current file')}</span>`:'<span style="font-size:11px;color:var(--text2)">No file</span>'}
+              <button class="btn sm" onclick="document.getElementById('he-file-${ai}').click()"><i class="ti ti-upload"></i> Upload</button>
+              <input type="file" id="he-file-${ai}" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="handleHistFile(this,'${id}',${ai})">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+            <button class="btn sm" onclick="toggleHistEdit('${id}',${ai})">Cancel</button>
+            <button class="btn sm primary" onclick="saveHistEdit('${id}',${ai})"><i class="ti ti-check"></i> Save version</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } else { hs.style.display='none'; }
+  const bg=document.getElementById('doc-modal-bg');
+  bg.classList.remove('hidden');
+  bg.scrollTop=0;
+}
+
+function toggleHistEdit(id,idx){const el=document.getElementById(`hist-edit-${id}-${idx}`);if(el)el.classList.toggle('open');}
+function saveHistEdit(id,idx){
+  const l=db.documents.find(x=>x.id===id);if(!l||!l.history)return;
+  l.history[idx].num=document.getElementById(`he-num-${idx}`).value;
+  l.history[idx].agency=document.getElementById(`he-agency-${idx}`).value;
+  l.history[idx].issued=document.getElementById(`he-issued-${idx}`).value;
+  l.history[idx].expiry=document.getElementById(`he-expiry-${idx}`).value;
+  l.history[idx].link=document.getElementById(`he-link-${idx}`).value;
+  l.history[idx].notes=document.getElementById(`he-notes-${idx}`).value;
+  scheduleSave();alert('Version saved.');toggleHistEdit(id,idx);editDoc(id);
+}
+function handleHistFile(inp,id,idx){
+  const file=inp.files[0];if(!file)return;
+  const reader=new FileReader();reader.onload=e=>{const l=db.documents.find(x=>x.id===id);if(!l||!l.history)return;l.history[idx].fileData=e.target.result;l.history[idx].fileName=file.name;l.history[idx].fileType=file.type;scheduleSave();alert('File updated for this version.');};reader.readAsDataURL(file);
+}
+function dlHist(id,i){const l=db.documents.find(x=>x.id===id);if(!l)return;const h=l.history[i];if(!h||!h.fileData)return;const a=document.createElement('a');a.href=h.fileData;a.download=h.fileName||'old-license';a.click();}
+function handleFile(inp){const file=inp.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{pendingFile={data:e.target.result,name:file.name,type:file.type};document.getElementById('f-file-preview').innerHTML=`<div class="fbadge"><i class="ti ti-file"></i>${escH(file.name)}<button style="background:none;border:none;cursor:pointer;color:var(--red);margin-left:6px" onclick="pendingFile=null;this.parentElement.remove()">×</button></div>`;};reader.readAsDataURL(file);}
+
+function saveDoc(){
+  const company=document.getElementById('f-company').value,vessel=document.getElementById('f-vessel-sel').value,vtype=document.getElementById('f-vtype').value,type=document.getElementById('f-ltype').value,num=document.getElementById('f-num').value.trim(),noExpiry=document.getElementById('f-noexpiry').checked,expiry=document.getElementById('f-expiry').value;
+  if(!company||!vessel||!vtype||!type||!num){alert('Please fill in all required fields (*).');return;}
+  if(!noExpiry&&!expiry){alert('Please enter an expiry date, or check "does not expire".');return;}
+  if(editDocId){
+    const old=db.documents.find(x=>x.id===editDocId);
+    const snap={num:old.num,agency:old.agency||'',issued:old.issued||'',expiry:old.expiry||'',noExpiry:old.noExpiry||false,link:old.link||'',notes:old.notes||'',fileData:old.fileData||null,fileName:old.fileName||null,fileType:old.fileType||null,savedAt:new Date().toISOString().slice(0,10)};
+    const hist=[...(old.history||[]),snap];
+    const i=db.documents.findIndex(x=>x.id===editDocId);
+    db.documents[i]={...old,company,vessel,vtype,type,num,agency:document.getElementById('f-agency').value.trim(),issued:document.getElementById('f-issued').value,expiry:noExpiry?'':expiry,noExpiry,link:document.getElementById('f-link').value.trim(),notes:document.getElementById('f-notes').value.trim(),fileData:pendingFile?.data||old.fileData||null,fileName:pendingFile?.name||old.fileName||null,fileType:pendingFile?.type||old.fileType||null,history:hist};
+  } else {
+    db.documents.push({id:uid(),company,vessel,vtype,type,num,agency:document.getElementById('f-agency').value.trim(),issued:document.getElementById('f-issued').value,expiry:noExpiry?'':expiry,noExpiry,link:document.getElementById('f-link').value.trim(),notes:document.getElementById('f-notes').value.trim(),fileData:pendingFile?.data||null,fileName:pendingFile?.name||null,fileType:pendingFile?.type||null,history:[]});
+  }
+  scheduleSave();
+  closeDocModal();
+  renderAll();
+}
+function delDoc(id){const l=db.documents.find(x=>x.id===id);if(confirm('Delete "'+l.num+'"? All history will be lost.')){db.documents=db.documents.filter(x=>x.id!==id);scheduleSave();renderAll();}}
+function viewFile(id){const l=db.documents.find(x=>x.id===id);if(!l||!l.fileData)return;const a=document.createElement('a');a.href=l.fileData;a.download=l.fileName||'license';a.click();}
+
+// ─── COMPANY FORM ─────────────────────────────────────────────
+function openCo(id){
+  editCoId=id;pendingCoEmails=[];pendingCoVessels=[];
+  document.getElementById('co-modal-title').textContent=id?'Edit company':'Add company';
+  if(id){
+    const co=db.companies.find(x=>x.id===id);
+    document.getElementById('co-name').value=co.name||'';
+    document.getElementById('co-contact').value=co.contact||'';
+    document.getElementById('co-phone').value=co.phone||'';
+    document.getElementById('co-notes').value=co.notes||'';
+    pendingCoEmails=[...(co.emails||[])];
+    pendingCoVessels=[...(co.vessels||[])];
+  } else {
+    ['co-name','co-contact','co-phone','co-notes'].forEach(f=>document.getElementById(f).value='');
+  }
+  renderCoEmailTags();renderCoVesselTags();
+  const bg=document.getElementById('co-modal-bg');
+  bg.classList.remove('hidden');
+  bg.scrollTop=0;
+}
+function closeCoModal(){
+  document.getElementById('co-modal-bg').classList.add('hidden');
+  editCoId=null;
+}
+function renderCoEmailTags(){const c=document.getElementById('co-email-tags');if(!c)return;c.innerHTML=pendingCoEmails.map(e=>`<span class="etag">${escH(e)}<button onclick="removePCE(${JSON.stringify(e)})">×</button></span>`).join('');}
+function addCoEmail(){const v=document.getElementById('new-co-email').value.trim();if(!v)return;if(!pendingCoEmails.includes(v)){pendingCoEmails.push(v);renderCoEmailTags();}document.getElementById('new-co-email').value='';}
+function removePCE(e){pendingCoEmails=pendingCoEmails.filter(x=>x!==e);renderCoEmailTags();}
+function renderCoVesselTags(){const c=document.getElementById('co-vessel-tags');if(!c)return;c.innerHTML=pendingCoVessels.map(v=>`<span class="etag">${escH(v)}<button onclick="removePCV(${JSON.stringify(v)})">×</button></span>`).join('');}
+function addCoVessel(){const v=document.getElementById('new-co-vessel').value.trim();if(!v)return;if(!pendingCoVessels.includes(v)){pendingCoVessels.push(v);renderCoVesselTags();}document.getElementById('new-co-vessel').value='';}
+function removePCV(v){pendingCoVessels=pendingCoVessels.filter(x=>x!==v);renderCoVesselTags();}
+function saveCo(){
+  const name=document.getElementById('co-name').value.trim();if(!name){alert('Company name is required.');return;}
+  const entry={id:editCoId||uid(),name,contact:document.getElementById('co-contact').value.trim(),emails:[...pendingCoEmails],vessels:[...pendingCoVessels],phone:document.getElementById('co-phone').value.trim(),notes:document.getElementById('co-notes').value.trim()};
+  if(editCoId){const i=db.companies.findIndex(x=>x.id===editCoId);db.companies[i]=entry;}else db.companies.push(entry);
+  scheduleSave();
+  closeCoModal();
+  renderAll();
+}
+function editCo(id){openCo(id);}
+function delCo(id){const co=db.companies.find(x=>x.id===id);if(confirm('Delete "'+co.name+'"?')){db.companies=db.companies.filter(x=>x.id!==id);scheduleSave();renderAll();}}
+
+// ─── EXPORT ───────────────────────────────────────────────────
+function exportExcel(){
+  if(!db.documents.length){alert('No documents to export.');return;}
+  const rows=db.documents.map(l=>({'Company':l.company,'Vessel':l.vessel||'','Vessel type':l.vtype||'','License type':l.type,'License number':l.num,'Issuing agency':l.agency||'','Issue date':l.issued||'','Expiry date':(l.noExpiry===true||l.noExpiry==='TRUE')?'No expiry':l.expiry||'','Status':getStatus(l),'Reference link':l.link||'','Notes':l.notes||'','Versions':(l.history||[]).length}));
+  const ws=XLSX.utils.json_to_sheet(rows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Documents');
+  if(db.companies.length){const cr=db.companies.map(c=>({'Company':c.name,'Contact':c.contact||'','Emails':(c.emails||[]).join(', '),'Vessels':(c.vessels||[]).join(', '),'Phone':c.phone||''}));XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(cr),'Companies');}
+  XLSX.writeFile(wb,'GENTUNA_FIP_Documents.xlsx');
+}
+function exportPDF(){
+  if(!db.documents.length){alert('No documents to export.');return;}
+  const rows=db.documents.map(l=>`<tr><td>${escH(l.company)}</td><td>${escH(l.vessel||'—')}</td><td>${escH(l.vtype||'—')}</td><td>${escH(l.type)}</td><td>${escH(l.num)}</td><td>${(l.noExpiry===true||l.noExpiry==='TRUE')?'No expiry':fmtDate(l.expiry)}</td><td>${getStatus(l).toUpperCase()}</td></tr>`).join('');
+  const html=`<!DOCTYPE html><html><head><title>GENTUNA FIP</title><style>body{font-family:Arial;font-size:10px;padding:20px}h2{font-size:14px}p{font-size:9px;color:#666;margin-bottom:10px}table{width:100%;border-collapse:collapse}th{background:#185FA5;color:#fff;padding:5px 8px;text-align:left;font-size:9px}td{padding:4px 8px;border-bottom:1px solid #eee;font-size:9px}tr:nth-child(even) td{background:#f9f9f9}</style></head><body><h2>GENTUNA FIP — Document Register</h2><p>Exported ${new Date().toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'})}</p><table><thead><tr><th>Company</th><th>Vessel</th><th>Vessel type</th><th>License type</th><th>License #</th><th>Expiry</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+  const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();w.print();}
+}
+
+// ─── MODAL CLOSE ON BACKDROP ──────────────────────────────────
+function setupModalBackdrop(bgId, closeFn){
+  const bg = document.getElementById(bgId);
+  if(!bg) return;
+  bg.addEventListener('mousedown', function(e){
+    // Only close if the mousedown started directly on the backdrop itself
+    if(e.target === bg) bg._backdropClick = true;
+    else bg._backdropClick = false;
+  });
+  bg.addEventListener('click', function(e){
+    if(e.target === bg && bg._backdropClick) closeFn();
+    bg._backdropClick = false;
+  });
+}
+setupModalBackdrop('doc-modal-bg', closeDocModal);
+setupModalBackdrop('co-modal-bg', closeCoModal);
+
+// ─── START ────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
