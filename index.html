@@ -1286,12 +1286,18 @@ async function connectSheet(){
   try{
     const res=await fetch(url+'?action=ping');
     if(!res.ok)throw new Error('HTTP '+res.status);
-    const data=await res.json();
+    const text=await res.text();
+    let data;
+    try{ data=JSON.parse(text); } catch(e){ throw new Error('Invalid response from Apps Script'); }
     if(!data.ok&&!data.time)throw new Error('Unexpected response from Apps Script');
     API_URL=url;
     lsSet(CFG_KEY,{apiUrl:url});
     hideLoad();
-    showLoginScreen();
+    // Show login screen directly — no extra API calls
+    document.getElementById('setup-screen').style.display='none';
+    document.getElementById('login-screen').style.display='flex';
+    document.getElementById('first-run-notice').style.display='flex';
+    setTimeout(()=>document.getElementById('login-pw').focus(),100);
   } catch(e){
     hideLoad();
     setSetupError('Could not connect: '+e.message+'. Make sure deployment access is set to "Anyone".');
@@ -1342,16 +1348,8 @@ async function init(){
 
 function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
+  document.getElementById('first-run-notice').style.display='flex';
   setTimeout(()=>document.getElementById('login-pw').focus(),100);
-  // Check first-run using direct fetch (API_URL is set, SESSION.pwHash may not be)
-  if(API_URL){
-    fetch(API_URL+'?action=verifyPassword&data='+encodeURIComponent(JSON.stringify({pw:'0'.repeat(64)})))
-      .then(r=>r.json())
-      .then(res=>{
-        const notice=document.getElementById('first-run-notice');
-        if(notice&&res&&res.firstRun)notice.style.display='flex';
-      }).catch(()=>{});
-  }
 }
 
 function showApp(){
