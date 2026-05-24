@@ -1342,8 +1342,9 @@ async function init(){
 
 function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
-  // Check if first run (no passwords set) by pinging verifyPassword with empty hash
-  apiGet('verifyPassword',{pw:'firstruncheck'}).then(res=>{
+  // Check if first run by sending a dummy hash (64 hex chars of zeros)
+  const dummyHash='0'.repeat(64);
+  apiGet('verifyPassword',{pw:dummyHash}).then(res=>{
     const notice=document.getElementById('first-run-notice');
     if(notice&&res&&res.firstRun)notice.style.display='flex';
   }).catch(()=>{});
