@@ -388,6 +388,10 @@ tr.selected td{background:var(--blue-bg)}
   <div class="login-box">
     <h1>GENTUNA FIP</h1>
     <p>Document Manager — enter your password to continue</p>
+    <div class="alert blue" id="first-run-notice" style="display:none;margin-bottom:.75rem">
+      <i class="ti ti-info-circle"></i>
+      <span>First time setup — no passwords set yet. Type <b>anything</b> and click Sign in to enter, then go to <b>Settings</b> to set your passwords.</span>
+    </div>
     <div class="fr">
       <label>Password</label>
       <input type="password" id="login-pw" placeholder="Enter password" onkeydown="if(event.key==='Enter')doLogin()">
@@ -1132,7 +1136,13 @@ let loginLockedUntil=0;
 
 async function doLogin(){
   const pw=document.getElementById('login-pw').value;
-  if(!pw)return;
+  if(!pw){
+    // Show hint if no password entered
+    const errEl=document.getElementById('login-error');
+    errEl.textContent='Please enter a password. On first run, type anything.';
+    errEl.style.display='block';
+    return;
+  }
   const errEl=document.getElementById('login-error');
   errEl.style.display='none';
 
@@ -1155,6 +1165,9 @@ async function doLogin(){
       ssSet(SESSION_KEY,SESSION);
       document.getElementById('login-screen').style.display='none';
       document.getElementById('login-pw').value='';
+      if(res.firstRun){
+        setTimeout(()=>showToast('Welcome! Go to Settings to set your Editor and Viewer passwords.','ok'),800);
+      }
       startSession();
     } else if(res&&res.locked){
       loginLockedUntil=Date.now()+10*60*1000;
@@ -1329,6 +1342,11 @@ async function init(){
 
 function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
+  // Check if first run (no passwords set) by pinging verifyPassword with empty hash
+  apiGet('verifyPassword',{pw:'firstruncheck'}).then(res=>{
+    const notice=document.getElementById('first-run-notice');
+    if(notice&&res&&res.firstRun)notice.style.display='flex';
+  }).catch(()=>{});
   setTimeout(()=>document.getElementById('login-pw').focus(),100);
 }
 
