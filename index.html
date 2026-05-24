@@ -419,7 +419,6 @@ tr.selected td{background:var(--blue-bg)}
       <button class="nav-item" data-tab="tracker"><i class="ti ti-ship"></i> Document tracker</button>
       <button class="nav-item" data-tab="companies"><i class="ti ti-building"></i> Companies</button>
       <button class="nav-item" data-tab="reminders"><i class="ti ti-bell"></i> Reminders <span class="nav-badge" id="reminder-badge" style="display:none">0</span></button>
-      <button class="nav-item" data-tab="timeline"><i class="ti ti-calendar"></i> Timeline</button>
       <button class="nav-item editor-only" data-tab="settings"><i class="ti ti-settings"></i> Settings</button>
     </nav>
     <div class="sb-bottom">
@@ -443,17 +442,8 @@ tr.selected td{background:var(--blue-bg)}
   <main class="main">
   <div class="main-inner">
 
-    <!-- Notification button in top-right -->
-    <div style="position:sticky;top:0;z-index:30;text-align:right;margin-bottom:-32px;padding-top:4px">
-      <button class="notif-btn" onclick="toggleNotifPanel()" title="Notifications">
-        <i class="ti ti-bell"></i>
-        <span class="notif-count" id="notif-count" style="display:none">0</span>
-      </button>
-    </div>
-    <div class="notif-panel" id="notif-panel">
-      <div class="notif-hdr">Notifications</div>
-      <div class="notif-list" id="notif-list"></div>
-    </div>
+    <!-- notif panel removed -->
+    <div id="notif-panel" style="display:none"><div id="notif-list"></div></div>
 
     <!-- ── DASHBOARD ──────────────────────────────── -->
     <div id="tab-dashboard" class="sec active">
@@ -635,10 +625,19 @@ tr.selected td{background:var(--blue-bg)}
         </div>
         <div class="fr-row">
           <div class="fr"><label>Reminder 3 (days before)</label><input type="number" id="rem-d3" value="30" min="1" oninput="scheduleSaveSettings()"></div>
-          <div class="fr"><label>Reminder 4 (days before)</label><input type="number" id="rem-d4" value="7" min="1" oninput="scheduleSaveSettings()"></div>
+          <div class="fr"><label>Reminder 4 (days <b>after</b> expiry)</label><input type="number" id="rem-d4" value="7" min="1" oninput="scheduleSaveSettings()"></div>
         </div>
-        <div class="alert blue" style="margin-top:8px">
-          <i class="ti ti-info-circle"></i> Reminder emails are sent automatically every day at 8am via your Gmail account. You can also send manually from this page.
+        <div class="fr" style="margin-top:8px">
+          <label>Email sending mode</label>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--r);flex:1;justify-content:center" id="mode-auto-lbl">
+              <input type="radio" name="email-mode" id="mode-auto" value="auto" onchange="saveEmailMode()" style="width:15px;height:15px"> Automatic (daily 8am)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:8px 14px;border:0.5px solid var(--border2);border-radius:var(--r);flex:1;justify-content:center" id="mode-manual-lbl">
+              <input type="radio" name="email-mode" id="mode-manual" value="manual" onchange="saveEmailMode()" style="width:15px;height:15px"> Manual only
+            </label>
+          </div>
+          <div class="alert blue" style="margin-top:8px"><i class="ti ti-info-circle"></i> <span id="email-mode-hint">Emails will be sent automatically every day at 8am via Gmail.</span></div>
         </div>
       </div>
       <div class="card" style="margin-bottom:12px">
@@ -658,18 +657,14 @@ tr.selected td{background:var(--blue-bg)}
       <div id="reminder-list"></div>
     </div>
 
-    <!-- ── TIMELINE ───────────────────────────────── -->
-    <div id="tab-timeline" class="sec">
-      <div class="topbar"><div class="topbar-left"><h2>Timeline</h2><p>Document expiry over the next 12 months</p></div></div>
-      <div class="card"><div id="timeline-content"></div></div>
-    </div>
+
 
     <!-- ── SETTINGS ───────────────────────────────── -->
     <div id="tab-settings" class="sec editor-only">
       <div class="topbar"><div class="topbar-left"><h2>Settings</h2></div>
         <div class="topbar-right">
-          <button class="btn" onclick="exportSettings()"><i class="ti ti-download"></i> Export settings</button>
-          <button class="btn" onclick="document.getElementById('import-settings-file').click()"><i class="ti ti-upload"></i> Import settings</button>
+          <button type="button" class="btn" onclick="exportSettings()"><i class="ti ti-download"></i> Export settings</button>
+          <button type="button" class="btn" onclick="event.preventDefault();document.getElementById('import-settings-file').click()"><i class="ti ti-upload"></i> Import settings</button>
           <input type="file" id="import-settings-file" accept=".json" style="display:none" onchange="importSettings(this)">
         </div>
       </div>
@@ -819,7 +814,7 @@ tr.selected td{background:var(--blue-bg)}
     <div id="co-vessel-list" style="margin-bottom:6px"></div>
     <div style="display:flex;gap:8px">
       <input type="text" id="new-co-vessel-name" placeholder="Vessel name, e.g. MV Sampaguita"
-        style="flex:1;font-size:13px;padding:7px 10px;border-radius:var(--r);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
+        style="flex:2;min-width:180px;font-size:13px;padding:7px 10px;border-radius:var(--r);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
       <select id="new-co-vessel-vtype"
         style="font-size:13px;padding:7px 10px;border-radius:var(--r);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
         <option value="">Vessel type…</option>
@@ -1261,18 +1256,29 @@ async function pingServer(){
 async function savePasswords(){
   const edPw=document.getElementById('set-editor-pw').value;
   const viPw=document.getElementById('set-viewer-pw').value;
+  if(!edPw&&!viPw){showToast('Enter at least one password to save','warn');return;}
+  let saved=0;
   if(edPw){
     const hash=await sha256(edPw);
-    await safeSend('setPassword',{role:'editor',pwHash:hash});
+    const res=await apiGet('setPassword',{role:'editor',pwHash:hash});
+    if(res&&res.success){
+      // Update session so future calls use new password
+      SESSION.pwHash=hash;
+      ssSet(SESSION_KEY,SESSION);
+      saved++;
+    }
   }
   if(viPw){
     const hash=await sha256(viPw);
-    await safeSend('setPassword',{role:'viewer',pwHash:hash});
+    const res=await apiGet('setPassword',{role:'viewer',pwHash:hash});
+    if(res&&res.success)saved++;
   }
-  if(edPw||viPw){
-    showToast('Passwords updated. Share them carefully.','ok');
+  if(saved>0){
+    showToast('Password'+(saved>1?'s':'')+' saved! Use your new password next time you log in.','ok');
     document.getElementById('set-editor-pw').value='';
     document.getElementById('set-viewer-pw').value='';
+  } else {
+    showToast('Could not save passwords — check connection','error');
   }
 }
 
@@ -1370,7 +1376,6 @@ function switchTab(tab){
   const btn=document.querySelector(`.nav-item[data-tab="${tab}"]`);
   if(sec)sec.classList.add('active');
   if(btn)btn.classList.add('active');
-  if(tab==='timeline')renderTimeline();
   if(tab==='settings'){renderSettings();loadChangelog();}
 }
 document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
@@ -1384,7 +1389,6 @@ function renderAll(){
   renderReminders();
   renderSettings();
   updateReminderBadge();
-  updateNotifPanel();
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────
@@ -1406,7 +1410,7 @@ function clearDashFilter(){
   activeDashFilter='';
   document.querySelectorAll('.stat-card').forEach(c=>c.classList.remove('active-filter'));
   document.getElementById('dash-clear-filter').style.display='none';
-  document.getElementById('dash-table-title').textContent='Expiring &amp; expired documents';
+  document.getElementById('dash-table-title').textContent='Expiring & expired documents';
   renderDashTable();
 }
 
@@ -1603,6 +1607,9 @@ function getFilteredDocs(){
     const mvt=!fvt||d.vtype===fvt;
     const mt=!ft||d.type===ft;
     const ms=!statuses.length||statuses.includes(getStatus(d));
+    // If date range is set, exclude noExpiry docs
+    const hasDateFilter=dfrom||dto;
+    if(hasDateFilter&&(d.noExpiry===true||d.noExpiry==='TRUE'))return false;
     const mdf=!dfrom||!d.expiry||(d.expiry>=dfrom);
     const mdt=!dto||!d.expiry||(d.expiry<=dto);
     return mq&&mc&&mv&&mvt&&mt&&ms&&mdf&&mdt;
@@ -1674,8 +1681,11 @@ function bulkExport(){
 
 // ── DOCUMENT TRACKER ──────────────────────────────────────────
 function getRequiredTypes(vtype){
-  // Check docRules first; fallback to all licTypes
-  if(db.docRules&&db.docRules[vtype]&&db.docRules[vtype].length)return db.docRules[vtype];
+  // Use docRules if the vessel type has been explicitly configured
+  if(db.docRules&&db.docRules.hasOwnProperty(vtype)){
+    return db.docRules[vtype].length ? db.docRules[vtype] : db.licTypes;
+  }
+  // Fallback: all licTypes
   return db.licTypes;
 }
 
@@ -1895,20 +1905,43 @@ function renderCompanies(){
 // Vessel editing from company card
 let editVesselCoId=null;let editVesselOldName=null;
 function openEditVessel(coId,oldName){
-  editVesselCoId=coId;editVesselOldName=oldName;
   const co=db.companies.find(c=>c.id===coId);
-  const v=co?.vessels?.find(v=>(v.name||v)===oldName);
-  const name=prompt('Edit vessel name:',oldName);
-  if(!name||name===oldName)return;
-  const vtype=prompt('Vessel type ('+db.vTypes.join('/')+'):', v?.vtype||'');
-  // Update vessel in company
-  co.vessels=co.vessels.map(ve=>(ve.name||ve)===oldName?{name,vtype:vtype||ve.vtype||''}:ve);
-  // Update all documents referencing old vessel name for this company
+  const v=co?.vessels?.find(ve=>(ve.name||ve)===oldName);
+  // Build modal HTML
+  const vtypeOpts=db.vTypes.map(t=>`<option value="${t}" ${(v?.vtype||''===t)?'selected':''}>${t}</option>`).join('');
+  const modalHtml=`<div class="modal-bg" id="ev-modal-bg" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:300;padding:1rem">
+    <div class="modal modal-sm" style="pointer-events:all">
+      <h2>Edit vessel</h2>
+      <div class="fr"><label>Vessel name</label><input id="ev-name" value="${escH(oldName)}" style="font-size:13px;width:100%;padding:8px 10px;border-radius:var(--r);border:0.5px solid var(--border2)"></div>
+      <div class="fr"><label>Vessel type</label>
+        <select id="ev-vtype" style="width:100%;font-size:13px;padding:8px 10px;border-radius:var(--r);border:0.5px solid var(--border2);background:var(--surface)">
+          <option value="">No type</option>${vtypeOpts}
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="document.getElementById('ev-modal-bg').remove()">Cancel</button>
+        <button type="button" class="btn primary" onclick="saveEditVessel('${coId}','${escH(oldName)}')"><i class="ti ti-check"></i> Save</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend',modalHtml);
+  // Pre-select current vtype
+  if(v?.vtype) document.getElementById('ev-vtype').value=v.vtype;
+}
+
+function saveEditVessel(coId,oldName){
+  const name=document.getElementById('ev-name').value.trim();
+  const vtype=document.getElementById('ev-vtype').value;
+  document.getElementById('ev-modal-bg').remove();
+  if(!name)return;
+  const co=db.companies.find(c=>c.id===coId);
+  if(!co)return;
+  co.vessels=co.vessels.map(ve=>(ve.name||ve)===oldName?{name,vtype}:ve);
   db.documents.forEach(d=>{if(d.company===co.name&&d.vessel===oldName){d.vessel=name;if(vtype)d.vtype=vtype;}});
   saveCoToSheets(co).then(()=>{
-    // Save affected documents
     db.documents.filter(d=>d.company===co.name&&d.vessel===name).forEach(d=>saveDocToSheets(d));
     renderAll();
+    showToast('Vessel updated','ok');
   });
 }
 
@@ -1917,6 +1950,7 @@ function renderReminders(){
   renderAdminEmailTags();
   renderTmplForms();
   applyReminderSettings();
+  applyEmailModeUI();
 
   const d1=db.settings.days1||90;
   const urgent=db.documents.filter(d=>{
@@ -2105,15 +2139,7 @@ function updateNotifPanel(){
   }).join('');
 }
 
-function toggleNotifPanel(){
-  const p=document.getElementById('notif-panel');
-  if(p)p.classList.toggle('open');
-}
-document.addEventListener('click',e=>{
-  const p=document.getElementById('notif-panel');
-  const btn=e.target.closest('.notif-btn');
-  if(p&&!btn&&!p.contains(e.target))p.classList.remove('open');
-});
+function toggleNotifPanel(){ /* removed */ }
 
 // ── SETTINGS ─────────────────────────────────────────────────
 function renderSettings(){
@@ -2525,9 +2551,19 @@ async function saveDoc(){
 
   const ok=await saveDocToSheets(doc);
   if(ok){
-    // Update local db
+    // Update local db — always upsert, never duplicate
     const idx=db.documents.findIndex(x=>x.id===doc.id);
-    if(idx>=0)db.documents[idx]=doc;else db.documents.push(doc);
+    if(idx>=0){
+      db.documents[idx]=doc;
+    } else {
+      // Remove any accidental duplicate with same company+vessel+type if it's a new doc
+      if(!editDocId){
+        const dupIdx=db.documents.findIndex(x=>x.company===doc.company&&x.vessel===doc.vessel&&x.type===doc.type&&x.id!==doc.id);
+        if(dupIdx>=0)db.documents.splice(dupIdx,1);
+      }
+      db.documents.push(doc);
+    }
+    lsSet(CACHE_KEY,db);
     closeDocModal();
     renderAll();
     showToast(editDocId?'Document updated':'Document added','ok');
@@ -2777,6 +2813,26 @@ function importBackup(inp){
 
 // ── START ─────────────────────────────────────────────────
 function applySettings(){applyRoleUI();resetSessionTimer();}
+
+function saveEmailMode(){
+  const mode=document.querySelector('input[name="email-mode"]:checked')?.value||'auto';
+  db.settings.emailMode=mode;
+  const hint=document.getElementById('email-mode-hint');
+  if(hint)hint.textContent=mode==='auto'
+    ?'Emails will be sent automatically every day at 8am via Gmail.'
+    :'Emails will only be sent when you click Send manually.';
+  scheduleSaveSettings();
+}
+
+function applyEmailModeUI(){
+  const mode=db.settings.emailMode||'auto';
+  const radio=document.getElementById('mode-'+mode);
+  if(radio)radio.checked=true;
+  const hint=document.getElementById('email-mode-hint');
+  if(hint)hint.textContent=mode==='auto'
+    ?'Emails will be sent automatically every day at 8am via Gmail.'
+    :'Emails will only be sent when you click Send manually.';
+}
 init();
 </script>
 </body>
