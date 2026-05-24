@@ -1342,13 +1342,16 @@ async function init(){
 
 function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
-  // Check if first run by sending a dummy hash (64 hex chars of zeros)
-  const dummyHash='0'.repeat(64);
-  apiGet('verifyPassword',{pw:dummyHash}).then(res=>{
-    const notice=document.getElementById('first-run-notice');
-    if(notice&&res&&res.firstRun)notice.style.display='flex';
-  }).catch(()=>{});
   setTimeout(()=>document.getElementById('login-pw').focus(),100);
+  // Check first-run using direct fetch (API_URL is set, SESSION.pwHash may not be)
+  if(API_URL){
+    fetch(API_URL+'?action=verifyPassword&data='+encodeURIComponent(JSON.stringify({pw:'0'.repeat(64)})))
+      .then(r=>r.json())
+      .then(res=>{
+        const notice=document.getElementById('first-run-notice');
+        if(notice&&res&&res.firstRun)notice.style.display='flex';
+      }).catch(()=>{});
+  }
 }
 
 function showApp(){
