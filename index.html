@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GENTUNA FIP Document Manager</title>
+<title>GENTUNA FIP Document Manager</title
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -1230,19 +1230,38 @@ async function doUnlock(){
   const pw=document.getElementById('lock-pw').value;
   if(!pw)return;
   const errEl=document.getElementById('lock-error');
+  const btn=document.querySelector('#lock-screen .btn.primary');
+  btnLoad(btn,'Verifying…');
   const hash=await sha256(pw);
-  if(hash===SESSION.pwHash){
-    document.getElementById('lock-screen').style.display='none';
-    document.getElementById('lock-pw').value='';
-    errEl.style.display='none';
-    resetSessionTimer();
-  } else {
-    errEl.textContent='Incorrect password.'; errEl.style.display='block';
+  // Try stored hash first (if session still in memory)
+  const storedHash=SESSION.pwHash||'';
+  // Verify against server (handles case where session was cleared on lock)
+  try{
+    const res=await apiGet('verifyPassword',{pw:hash});
+    btnReset(btn);
+    if(res&&res.ok){
+      SESSION={role:res.role,pwHash:hash};
+      ssSet(SESSION_KEY,SESSION);
+      document.getElementById('lock-screen').style.display='none';
+      document.getElementById('lock-pw').value='';
+      document.getElementById('app').style.display='flex';
+      errEl.style.display='none';
+      resetSessionTimer();
+    } else {
+      errEl.textContent='Incorrect password.'; errEl.style.display='block';
+    }
+  }catch(e){
+    btnReset(btn);
+    errEl.textContent='Could not connect: '+e.message; errEl.style.display='block';
   }
 }
 
 function lockApp(){
   clearSessionTimer();
+  // Clear session so refresh also requires password
+  sessionStorage.removeItem(SESSION_KEY);
+  SESSION={role:null,pwHash:null};
+  document.getElementById('app').style.display='none';
   document.getElementById('lock-screen').style.display='flex';
   document.getElementById('lock-pw').value='';
   document.getElementById('lock-error').style.display='none';
@@ -1353,6 +1372,13 @@ function showLoginScreen(){
   const notice=document.getElementById('first-run-notice');
   if(notice)notice.style.display='none';
   setTimeout(()=>document.getElementById('login-pw').focus(),100);
+  // Check if first run — show notice only if no passwords set
+  if(API_URL){
+    fetch(API_URL+'?action=verifyPassword&data='+encodeURIComponent(JSON.stringify({pw:'0'.repeat(64)})))
+      .then(r=>r.json())
+      .then(res=>{ if(notice&&res&&res.firstRun)notice.style.display='flex'; })
+      .catch(()=>{});
+  }
 }
 
 function showApp(){
@@ -1380,12 +1406,13 @@ async function init(){
     SESSION=sess;
     const cached=lsGet(CACHE_KEY);
     if(cached)applyLoadedData(cached);
-    showApp();                      // Show immediately with cached data
+    showApp();
     showLoad('Syncing latest data…');
-    await loadFromSheets();         // Refresh from Sheets in background
+    await loadFromSheets();
     hideLoad();
     renderAll();
   } else {
+    // No session — show login (covers both fresh load and post-lock refresh)
     hideLoad();
     showLoginScreen();
   }
@@ -1801,6 +1828,8 @@ function toggleHistEditInView(docId,idx){
 
 async function saveHistEditFromView(docId,idx){
   const d=db.documents.find(x=>x.id===docId); if(!d||!d.history)return;
+  const btn=document.getElementById(`hef-view-${docId}-${idx}`)?.querySelector('.btn.primary');
+  btnLoad(btn,'Saving…');
   d.history[idx].num=document.getElementById(`hev-num-${idx}`).value;
   d.history[idx].issued=document.getElementById(`hev-issued-${idx}`).value;
   d.history[idx].expiry=document.getElementById(`hev-expiry-${idx}`).value;
@@ -1998,12 +2027,16 @@ function openEditVessel(coId,oldName){
 function saveEditVessel(coId,oldName){
   const name=document.getElementById('ev-name').value.trim();
   const vtype=document.getElementById('ev-vtype').value;
-  document.getElementById('ev-bg').remove();
   if(!name)return;
   const co=db.companies.find(c=>c.id===coId); if(!co)return;
+  // Show saving indicator before removing modal
+  const saveBtn=document.querySelector('#ev-bg .btn.primary');
+  btnLoad(saveBtn,'Saving…');
   co.vessels=co.vessels.map(ve=>(ve.name||ve)===oldName?{name,vtype}:ve);
   db.documents.forEach(d=>{ if(d.company===co.name&&d.vessel===oldName){ d.vessel=name; if(vtype)d.vtype=vtype; } });
+  setSyncStatus('busy','Saving…');
   saveCoToSheets(co).then(ok=>{
+    document.getElementById('ev-bg')?.remove();
     if(ok){
       db.documents.filter(d=>d.company===co.name&&d.vessel===name).forEach(d=>saveDocToSheets(d));
       renderAll(); showToast('Vessel updated','ok');
