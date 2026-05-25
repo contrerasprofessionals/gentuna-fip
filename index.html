@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GENTUNA FIP Document Manager</title
+<title>GENTUNA FIP Document Manager</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -1762,8 +1762,8 @@ function viewDocDetail(id){
               <div style="color:var(--text3);font-size:10px;margin-top:2px">Saved: ${fmtDate(h.savedAt)}</div>
             </div>
             ${SESSION.role==='editor'?`<div style="display:flex;gap:4px;flex-shrink:0">
-              <button class="ib e" onclick="toggleHistEditInView('${id}',${origIdx})" title="Edit version"><i class="ti ti-edit"></i></button>
-              <button class="ib d" onclick="deleteHistEntryFromView('${id}',${origIdx})" title="Delete version"><i class="ti ti-trash"></i></button>
+              <button class="ib e" data-docid="${id}" data-idx="${origIdx}" onclick="toggleHistEditInView(this)" title="Edit version"><i class="ti ti-edit"></i></button>
+              <button class="ib d" data-docid="${id}" data-idx="${origIdx}" onclick="deleteHistEntryFromView(this)" title="Delete version"><i class="ti ti-trash"></i></button>
             </div>`:''}
           </div>
           <div id="hef-view-${id}-${origIdx}" style="display:none;margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border)">
@@ -1774,8 +1774,8 @@ function viewDocDetail(id){
               <div class="fr"><label style="font-size:10px">Reference link</label><input type="url" id="hev-link-${origIdx}" value="${escH(h.link||'')}" style="font-size:12px;width:100%;padding:6px 8px;border-radius:var(--r);border:0.5px solid var(--border2)"></div>
             </div>
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
-              <button type="button" class="btn sm" onclick="toggleHistEditInView('${id}',${origIdx})">Cancel</button>
-              <button type="button" class="btn sm primary" onclick="saveHistEditFromView('${id}',${origIdx})"><i class="ti ti-check"></i> Save version</button>
+              <button type="button" class="btn sm" data-docid="${id}" data-idx="${origIdx}" onclick="toggleHistEditInView(this)">Cancel</button>
+              <button type="button" class="btn sm primary" data-docid="${id}" data-idx="${origIdx}" onclick="saveHistEditFromView(this)"><i class="ti ti-check"></i> Save version</button>
             </div>
           </div>
         </div>`;
@@ -1821,26 +1821,31 @@ function viewDocDetail(id){
   document.getElementById('view-doc-modal').addEventListener('mousedown',function(e){ if(e.target===this)this.remove(); });
 }
 
-function toggleHistEditInView(docId,idx){
-  const el=document.getElementById(`hef-view-${docId}-${idx}`);
+function toggleHistEditInView(btn){
+  const docId=btn.dataset.docid;
+  const idx=parseInt(btn.dataset.idx);
+  const el=document.getElementById('hef-view-'+docId+'-'+idx);
   if(el)el.style.display=el.style.display==='none'?'block':'none';
 }
 
-async function saveHistEditFromView(docId,idx){
+async function saveHistEditFromView(btn){
+  const docId=btn.dataset.docid;
+  const idx=parseInt(btn.dataset.idx);
   const d=db.documents.find(x=>x.id===docId); if(!d||!d.history)return;
-  const btn=document.getElementById(`hef-view-${docId}-${idx}`)?.querySelector('.btn.primary');
   btnLoad(btn,'Saving…');
-  d.history[idx].num=document.getElementById(`hev-num-${idx}`).value;
-  d.history[idx].issued=document.getElementById(`hev-issued-${idx}`).value;
-  d.history[idx].expiry=document.getElementById(`hev-expiry-${idx}`).value;
-  d.history[idx].link=document.getElementById(`hev-link-${idx}`).value;
+  d.history[idx].num=document.getElementById('hev-num-'+idx).value;
+  d.history[idx].issued=document.getElementById('hev-issued-'+idx).value;
+  d.history[idx].expiry=document.getElementById('hev-expiry-'+idx).value;
+  d.history[idx].link=document.getElementById('hev-link-'+idx).value;
   const res=await safeSend('updateHistory',{docId,idx,snapshot:d.history[idx]});
   if(res&&res.success){ showToast('Version saved','ok'); lsSet(CACHE_KEY,db); }
   document.getElementById('view-doc-modal')?.remove();
   viewDocDetail(docId);
 }
 
-async function deleteHistEntryFromView(docId,idx){
+async function deleteHistEntryFromView(btn){
+  const docId=btn.dataset.docid;
+  const idx=parseInt(btn.dataset.idx);
   if(!confirm('Delete this version permanently?'))return;
   const d=db.documents.find(x=>x.id===docId); if(!d||!d.history)return;
   d.history.splice(idx,1);
