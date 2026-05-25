@@ -542,7 +542,7 @@ tr.selected td{background:var(--blue-bg)}
         <select id="f-type" onchange="renderDocs()"><option value="">All document types</option></select>
         <div class="multi-select-wrap">
           <button type="button" class="multi-select-btn" onclick="toggleMultiSelect(event)">
-            <span id="ms-label">All statuses</span><i class="ti ti-chevron-down" style="font-size:12px"></i>
+            <span id="ms-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">All statuses</span><i class="ti ti-chevron-down" style="font-size:12px;flex-shrink:0"></i>
           </button>
           <div class="multi-select-dropdown" id="ms-dropdown">
             <div class="ms-option"><input type="checkbox" id="ms-active" value="active" onchange="renderDocs()"><label for="ms-active">Active</label></div>
@@ -672,16 +672,28 @@ tr.selected td{background:var(--blue-bg)}
         <div>
           <div class="card" style="margin-bottom:12px">
             <h3><i class="ti ti-lock"></i> Access & passwords</h3>
-            <div class="fr"><label>Editor password (full access)</label>
-              <input type="password" id="set-editor-pw" placeholder="Set editor password" autocomplete="new-password">
+            <div class="fr">
+              <label>Editor password (full access)</label>
+              <div id="editor-pw-status" style="font-size:11px;color:var(--green);margin-bottom:4px;display:none"><i class="ti ti-lock-check"></i> Password is currently set</div>
+              <input type="password" id="set-editor-pw" placeholder="New editor password" autocomplete="new-password">
             </div>
-            <div class="fr"><label>Viewer password (read only)</label>
-              <input type="password" id="set-viewer-pw" placeholder="Set viewer password" autocomplete="new-password">
+            <div class="fr">
+              <label>Confirm editor password</label>
+              <input type="password" id="set-editor-pw2" placeholder="Re-enter new editor password" autocomplete="new-password">
+            </div>
+            <div class="fr">
+              <label>Viewer password (read only)</label>
+              <div id="viewer-pw-status" style="font-size:11px;color:var(--green);margin-bottom:4px;display:none"><i class="ti ti-lock-check"></i> Password is currently set</div>
+              <input type="password" id="set-viewer-pw" placeholder="New viewer password" autocomplete="new-password">
+            </div>
+            <div class="fr">
+              <label>Confirm viewer password</label>
+              <input type="password" id="set-viewer-pw2" placeholder="Re-enter new viewer password" autocomplete="new-password">
             </div>
             <div class="fr"><label>Session timeout (minutes)</label>
               <input type="number" id="set-timeout" value="30" min="5" max="480" oninput="scheduleSaveSettings()">
             </div>
-            <button class="btn primary" onclick="savePasswords()" style="margin-top:4px"><i class="ti ti-check"></i> Save passwords</button>
+            <button class="btn primary" id="save-pw-btn" onclick="savePasswords()" style="margin-top:4px"><i class="ti ti-check"></i> Save passwords</button>
           </div>
           <div class="card">
             <h3><i class="ti ti-ship"></i> Vessel types</h3>
@@ -861,7 +873,9 @@ tr.selected td{background:var(--blue-bg)}
 <script>
 'use strict';
 // ============================================================
-// GENTUNA FIP Document Manager — Client JS
+// GENTUNA FIP Document Manager — Client JS v10
+// Full rewrite: POST saves, white-screen fix, date fix,
+// versioning fix, tracker fix, spinner, all UI fixes
 // ============================================================
 
 // ── CONSTANTS ────────────────────────────────────────────────
@@ -877,14 +891,18 @@ const DEF_LIC_TYPES = [
 ];
 const DEF_VTYPES = ['Catcher','Carrier','Lightboat'];
 const DEF_TMPLS = [
-  {label:'Reminder 1',subject:'[GENTUNA FIP] Advance notice — {{doc_num}} expires in {{days_left}}',
-   body:'Dear team,\n\nAdvance notice: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}}\nDocument type: {{doc_type}}\nDocument number: {{doc_num}}\nExpiry date: {{expiry_date}}\nReference: {{link}}\n\nPlease begin preparing renewal requirements.\n\nRegards,\nGENTUNA FIP Document Manager'},
-  {label:'Reminder 2',subject:'[GENTUNA FIP] Renewal reminder — {{doc_num}} expires in {{days_left}}',
-   body:'Dear team,\n\nReminder: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}}\nDocument type: {{doc_type}}\nDocument number: {{doc_num}}\nExpiry date: {{expiry_date}}\n\nPlease submit all renewal requirements as soon as possible.\n\nRegards,\nGENTUNA FIP Document Manager'},
-  {label:'Reminder 3',subject:'[GENTUNA FIP] URGENT — {{doc_num}} expires in {{days_left}}',
-   body:'Dear team,\n\nUrgent: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}}\nDocument type: {{doc_type}}\nDocument number: {{doc_num}}\nExpiry date: {{expiry_date}}\n\nImmediate action required.\n\nRegards,\nGENTUNA FIP Document Manager'},
-  {label:'Reminder 4',subject:'[GENTUNA FIP] CRITICAL — {{doc_num}} expires in {{days_left}}',
-   body:'Dear team,\n\nCRITICAL: the following document expires in {{days_left}} and must be renewed immediately.\n\nCompany: {{company}}\nVessel: {{vessel}}\nDocument type: {{doc_type}}\nDocument number: {{doc_num}}\nExpiry date: {{expiry_date}}\n\nEscalate immediately.\n\nRegards,\nGENTUNA FIP Document Manager'}
+  {label:'Reminder 1 (90 days)',
+   subject:'[GENTUNA FIP] Advance notice — {{doc_type}} expires in {{days_left}}',
+   body:'Dear team,\n\nAdvance notice: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}} ({{vessel_type}})\nDocument type: {{doc_type}}\nDocument number: {{doc_num}}\nExpiry date: {{expiry_date}}\nReference: {{link}}\n\nPlease begin preparing renewal requirements.\n\nRegards,\nGENTUNA FIP Document Manager'},
+  {label:'Reminder 2 (60 days)',
+   subject:'[GENTUNA FIP] Renewal reminder — {{doc_type}} expires in {{days_left}}',
+   body:'Dear team,\n\nReminder: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}} ({{vessel_type}})\nDocument type: {{doc_type}}\nDocument number: {{doc_num}}\nExpiry date: {{expiry_date}}\n\nPlease submit all renewal requirements as soon as possible.\n\nRegards,\nGENTUNA FIP Document Manager'},
+  {label:'Reminder 3 (30 days)',
+   subject:'[GENTUNA FIP] URGENT — {{doc_type}} expires in {{days_left}}',
+   body:'Dear team,\n\nUrgent: the following document expires in {{days_left}}.\n\nCompany: {{company}}\nVessel: {{vessel}} ({{vessel_type}})\nDocument type: {{doc_type}}\nDocument number: {{doc_num}}\nExpiry date: {{expiry_date}}\n\nImmediate action required.\n\nRegards,\nGENTUNA FIP Document Manager'},
+  {label:'Reminder 4 (after expiry)',
+   subject:'[GENTUNA FIP] OVERDUE — {{doc_type}} expired {{days_left}}',
+   body:'Dear team,\n\nThis document is now OVERDUE.\n\nCompany: {{company}}\nVessel: {{vessel}} ({{vessel_type}})\nDocument type: {{doc_type}}\nDocument number: {{doc_num}}\nExpiry date: {{expiry_date}}\nDays overdue: {{days_left}}\n\nImmediate renewal required.\n\nRegards,\nGENTUNA FIP Document Manager'}
 ];
 
 // ── STATE ────────────────────────────────────────────────────
@@ -896,16 +914,17 @@ let db = {
   settings:{
     adminEmails:[],days1:90,days2:60,days3:30,days4:7,
     templates:JSON.parse(JSON.stringify(DEF_TMPLS)),
-    sessionTimeout:30
+    sessionTimeout:30, emailMode:'auto',
+    editorPwSet:false, viewerPwSet:false
   }
 };
-let pendingQueue = []; // offline queue
+let pendingQueue = [];
 let sortCol='company', sortDir=1;
 let selectedDocs = new Set();
-
+let activeDashFilter = '';
 let editDocId = null, editCoId = null;
 let pendingCoEmails = [], pendingCoVessels = [];
-let pendingFile = null; // {driveFileId, driveFileName, driveFileUrl}
+let pendingFile = null;
 let conflictPending = null;
 let sessionTimer = null;
 let heartbeatTimer = null;
@@ -913,58 +932,88 @@ let sessionId = uid();
 let settingsSaveTimer = null;
 
 const DOC_COLS_DEF = [
-  {key:'_sel',    label:'',            w:'4%',  nosort:true},
-  {key:'company', label:'Company',     w:'14%'},
-  {key:'vessel',  label:'Vessel',      w:'11%'},
-  {key:'vtype',   label:'Vessel type', w:'10%'},
-  {key:'type',    label:'Document type',w:'16%'},
-  {key:'num',     label:'Doc number',  w:'10%'},
-  {key:'expiry',  label:'Expiry',      w:'9%'},
-  {key:'status',  label:'Status',      w:'8%'},
-  {key:'_file',   label:'File',        w:'5%',  nosort:true},
-  {key:'_link',   label:'Link',        w:'4%',  nosort:true},
-  {key:'_act',    label:'',            w:'9%',  nosort:true}
+  {key:'_sel',    label:'',             w:'3%',  nosort:true},
+  {key:'company', label:'Company',      w:'13%'},
+  {key:'vessel',  label:'Vessel',       w:'10%'},
+  {key:'vtype',   label:'Vessel type',  w:'9%'},
+  {key:'type',    label:'Document type',w:'15%'},
+  {key:'num',     label:'Doc number',   w:'9%'},
+  {key:'expiry',  label:'Expiry',       w:'8%'},
+  {key:'status',  label:'Status',       w:'7%'},
+  {key:'_file',   label:'File',         w:'4%',  nosort:true},
+  {key:'_link',   label:'Link',         w:'4%',  nosort:true},
+  {key:'_act',    label:'',             w:'8%',  nosort:true}
 ];
 
-// ── LOCAL STORAGE ────────────────────────────────────────────
+// ── UTILS ────────────────────────────────────────────────────
 function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
-function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){console.warn('localStorage full',e);}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){console.warn('lsSet fail',e);}}
 function ssGet(k){try{const v=sessionStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
 function ssSet(k,v){try{sessionStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
-// ── HELPERS ──────────────────────────────────────────────────
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
+
+// Safe date string — always returns YYYY-MM-DD or ''
+function safeDate(v){
+  if(!v||v==='')return'';
+  // If it's a Date object or ISO string from Sheets
+  try{
+    const s=String(v);
+    // Already YYYY-MM-DD
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+    // ISO datetime
+    if(s.includes('T'))return s.slice(0,10);
+    // Google Sheets Date object serialized as date string like "Mon Jan 01 2024..."
+    const d=new Date(s);
+    if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);
+  }catch(e){}
+  return'';
+}
+
 function fmtDate(d){
-  if(!d||d==='')return'—';
-  try{return new Date(String(d).slice(0,10)+'T00:00:00').toLocaleDateString('en-PH',{year:'numeric',month:'short',day:'numeric'});}
-  catch(e){return String(d);}
+  const s=safeDate(d);
+  if(!s)return'—';
+  try{return new Date(s+'T00:00:00').toLocaleDateString('en-PH',{year:'numeric',month:'short',day:'numeric'});}
+  catch(e){return s;}
 }
+
 function daysLeft(e){
-  if(!e)return 9999;
-  return Math.ceil((new Date(String(e).slice(0,10)+'T00:00:00')-new Date())/864e5);
+  const s=safeDate(e);
+  if(!s)return 9999;
+  return Math.ceil((new Date(s+'T00:00:00')-new Date())/(1000*60*60*24));
 }
+
 function getStatus(l){
-  if(l.noExpiry===true||l.noExpiry==='TRUE'||!l.expiry||l.expiry==='')return'noexpiry';
+  if(toBool(l.noExpiry)||!l.expiry||safeDate(l.expiry)==='')return'noexpiry';
   const d=daysLeft(l.expiry);
   if(d<0)return'expired';
   if(d<=90)return'expiring';
   return'active';
 }
+
 function statusLabel(s){return{active:'Active',expiring:'Expiring soon',expired:'Expired',noexpiry:'No expiry'}[s]||s;}
 function escH(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function toBool(v){return v===true||v==='TRUE'||v==='true';}
+
+function isValidDate(s){
+  if(!s)return false;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;
+  const d=new Date(s+'T00:00:00');
+  return !isNaN(d.getTime())&&d.getFullYear()>1900&&d.getFullYear()<2100;
+}
 
 async function sha256(str){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
 }
 
+// ── TOAST & LOADING ──────────────────────────────────────────
 function showToast(msg,type='info'){
   let t=document.getElementById('toast');
   if(!t){t=document.createElement('div');t.id='toast';document.body.appendChild(t);}
-  const colors={ok:'var(--green-bg)/27500a',info:'var(--blue-bg)/0c447c',error:'var(--red-bg)/791f1f',warn:'var(--amber-bg)/633806'};
-  const [bg,col]=(colors[type]||colors.info).split('/');
-  t.style.cssText=`background:${bg};color:#${col};border:0.5px solid;opacity:1`;
+  const bg={ok:'#eaf3de',info:'#e6f1fb',error:'#fcebeb',warn:'#faeeda'}[type]||'#e6f1fb';
+  const col={ok:'#27500a',info:'#0c447c',error:'#791f1f',warn:'#633806'}[type]||'#0c447c';
+  t.style.cssText=`background:${bg};color:${col};border:0.5px solid ${col}40;opacity:1`;
   t.textContent=msg;
   clearTimeout(window._tt);
   window._tt=setTimeout(()=>{t.style.opacity='0';},type==='error'?8000:4000);
@@ -976,7 +1025,20 @@ function showLoad(msg='Loading…'){
 }
 function hideLoad(){document.getElementById('loading-overlay').style.display='none';}
 
-// ── API ──────────────────────────────────────────────────────
+// Button spinner helpers
+function btnLoad(btn,msg=''){
+  if(!btn)return;
+  btn._origHtml=btn.innerHTML;
+  btn.disabled=true;
+  btn.innerHTML=`<span style="display:inline-flex;align-items:center;gap:6px"><span style="width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;display:inline-block"></span>${msg||'Saving…'}</span>`;
+}
+function btnReset(btn){
+  if(!btn||!btn._origHtml)return;
+  btn.disabled=false;
+  btn.innerHTML=btn._origHtml;
+  btn._origHtml=null;
+}
+
 function setSyncStatus(state,msg){
   const dot=document.getElementById('sync-dot');
   const lbl=document.getElementById('sync-label');
@@ -984,35 +1046,70 @@ function setSyncStatus(state,msg){
   if(lbl)lbl.textContent=msg;
 }
 
-async function apiGet(action,data={}){
-  let url=API_URL+'?action='+action+'&pw='+encodeURIComponent(SESSION.pwHash||'');
+// ── API — POST for writes, GET for reads ──────────────────────
+async function apiPost(action, data={}){
+  const pw=SESSION.pwHash||'';
+  const body=JSON.stringify({action, pw, data});
+  const resp=await fetch(API_URL, {
+    method:'POST',
+    headers:{'Content-Type':'text/plain'}, // text/plain avoids CORS preflight
+    body,
+    redirect:'follow'
+  });
+  if(!resp.ok)throw new Error('HTTP '+resp.status);
+  const text=await resp.text();
+  try{return JSON.parse(text);}
+  catch(e){
+    if(text.includes('<'))throw new Error('Apps Script error. Check deployment.');
+    throw new Error('Bad response: '+text.slice(0,100));
+  }
+}
+
+async function apiGet(action, data={}){
+  const pw=SESSION.pwHash||'';
+  let url=API_URL+'?action='+action+'&pw='+encodeURIComponent(pw);
   if(Object.keys(data).length){url+='&data='+encodeURIComponent(JSON.stringify(data));}
   const resp=await fetch(url,{method:'GET',redirect:'follow'});
   if(!resp.ok)throw new Error('HTTP '+resp.status);
   const text=await resp.text();
   try{return JSON.parse(text);}
   catch(e){
-    if(text.includes('<'))throw new Error('Apps Script returned an error page. Check your deployment.');
-    throw new Error('Could not parse response: '+text.slice(0,100));
+    if(text.includes('<'))throw new Error('Apps Script error. Check deployment.');
+    throw new Error('Bad response: '+text.slice(0,100));
   }
 }
 
-async function safeSend(action, payload){
-  // Try online; if fail, queue for later
+// Use POST for writes, GET for reads
+async function apiCall(action, data={}){
+  const writeActions=['saveDocument','saveCompany','saveHistory','updateHistory',
+    'deleteDocument','deleteCompany','deleteHistory','saveSettings',
+    'saveLicTypes','saveVTypes','saveDocRules','setPassword','sendReminders'];
+  if(writeActions.includes(action))return apiPost(action,data);
+  return apiGet(action,data);
+}
+
+async function safeSend(action, payload={}){
   try{
-    const res=await apiGet(action, payload);
+    // Strip history from document saves — history saved separately
+    const lean={...payload};
+    if(action==='saveDocument')delete lean.history;
+    const res=await apiCall(action, lean);
     if(res&&res.error==='unauthorized'){
       showToast('Session expired — please log in again.','error');
       lockApp();
       return null;
     }
+    if(res&&res.error){
+      showToast('Error: '+res.error,'error');
+      setSyncStatus('err','Error: '+res.error);
+      return null;
+    }
     return res;
   } catch(e){
-    // Queue if offline
     pendingQueue.push({action, payload, ts:Date.now()});
     lsSet('gfip_queue', pendingQueue);
     updatePendingBadge();
-    showToast('No connection — change queued and will sync automatically.','warn');
+    showToast('Connection issue — change queued for retry.','warn');
     return null;
   }
 }
@@ -1021,32 +1118,25 @@ async function drainQueue(){
   if(!pendingQueue.length)return;
   const failed=[];
   for(const item of pendingQueue){
-    try{
-      await apiGet(item.action, item.payload);
-    } catch(e){
-      failed.push(item);
-    }
+    try{await apiCall(item.action, item.payload);}
+    catch(e){failed.push(item);}
   }
   pendingQueue=failed;
   lsSet('gfip_queue', pendingQueue);
   updatePendingBadge();
-  if(!failed.length&&pendingQueue.length===0)showToast('All pending changes synced!','ok');
+  if(!failed.length)showToast('All pending changes synced!','ok');
 }
 
 function updatePendingBadge(){
   const el=document.getElementById('pending-badge');
   if(!el)return;
-  if(pendingQueue.length>0){
-    el.className='pending-badge show';
-    el.textContent=pendingQueue.length+' change(s) pending sync';
-  } else {
-    el.className='pending-badge';
-  }
+  if(pendingQueue.length>0){el.className='pending-badge show';el.textContent=pendingQueue.length+' change(s) pending';}
+  else{el.className='pending-badge';}
 }
 
-// ── LOAD ALL FROM SHEETS ──────────────────────────────────────
+// ── LOAD ALL ─────────────────────────────────────────────────
 async function loadFromSheets(){
-  setSyncStatus('busy','Loading…');
+  setSyncStatus('busy','Syncing…');
   try{
     const result=await apiGet('loadAll');
     if(result.error)throw new Error(result.error);
@@ -1055,15 +1145,23 @@ async function loadFromSheets(){
     if(db.documents.length>0)saveLocalBackup();
     setSyncStatus('ok','Synced · '+new Date().toLocaleTimeString());
     return true;
-  } catch(e){
-    setSyncStatus('err','Load failed: '+e.message);
+  }catch(e){
+    setSyncStatus('err','Sync failed: '+e.message);
     console.error('loadFromSheets:',e);
     return false;
   }
 }
 
 function applyLoadedData(result){
-  if(result.documents!==undefined)db.documents=result.documents.map(d=>({...d,noExpiry:toBool(d.noExpiry)}));
+  if(result.documents!==undefined){
+    db.documents=result.documents.map(d=>({
+      ...d,
+      noExpiry:toBool(d.noExpiry),
+      issued:safeDate(d.issued),
+      expiry:safeDate(d.expiry),
+      history:(d.history||[]).map(h=>({...h,issued:safeDate(h.issued),expiry:safeDate(h.expiry)}))
+    }));
+  }
   if(result.companies!==undefined)db.companies=result.companies;
   if(result.licTypes&&result.licTypes.length)db.licTypes=result.licTypes;
   if(result.vTypes&&result.vTypes.length)db.vTypes=result.vTypes;
@@ -1071,33 +1169,33 @@ function applyLoadedData(result){
   if(result.settings){
     db.settings=Object.assign({
       adminEmails:[],days1:90,days2:60,days3:30,days4:7,
-      templates:JSON.parse(JSON.stringify(DEF_TMPLS)),sessionTimeout:30
+      templates:JSON.parse(JSON.stringify(DEF_TMPLS)),
+      sessionTimeout:30,emailMode:'auto',
+      editorPwSet:false,viewerPwSet:false
     },result.settings);
     if(!db.settings.templates||db.settings.templates.length<4)
       db.settings.templates=JSON.parse(JSON.stringify(DEF_TMPLS));
   }
 }
 
-// ── SAVE SINGLE DOCUMENT ─────────────────────────────────────
+// ── SAVE DOCUMENT ─────────────────────────────────────────────
 async function saveDocToSheets(doc){
   setSyncStatus('busy','Saving…');
   doc.clientLastModified=doc.lastModified||'';
   const res=await safeSend('saveDocument',doc);
   if(!res)return false;
-  if(res.conflict){
-    showConflictModal(res.serverRecord, doc);
-    return false;
-  }
+  if(res.conflict){showConflictModal(res.serverRecord,doc);return false;}
   if(res.success){
-    // Update local copy with server lastModified
+    doc.lastModified=res.lastModified||doc.lastModified;
     const idx=db.documents.findIndex(d=>d.id===doc.id);
-    if(idx>=0){db.documents[idx].lastModified=res.lastModified;}
+    if(idx>=0)db.documents[idx]={...doc};
+    else db.documents.push({...doc});
     lsSet(CACHE_KEY,db);
     saveLocalBackup();
     setSyncStatus('ok','Saved · '+new Date().toLocaleTimeString());
     return true;
   }
-  setSyncStatus('err','Save error');
+  setSyncStatus('err','Save failed');
   return false;
 }
 
@@ -1110,12 +1208,12 @@ async function saveCoToSheets(co){
   setSyncStatus('busy','Saving…');
   const res=await safeSend('saveCompany',co);
   if(res&&res.success){
-    if(res.created)co.id=res.id;
+    if(res.id)co.id=res.id;
     lsSet(CACHE_KEY,db);
     setSyncStatus('ok','Saved · '+new Date().toLocaleTimeString());
     return true;
   }
-  setSyncStatus('err','Save error');
+  setSyncStatus('err','Save failed');
   return false;
 }
 
@@ -1126,57 +1224,42 @@ async function syncNow(){
 }
 
 // ── AUTH ─────────────────────────────────────────────────────
-let loginAttempts=0;
-let loginLockedUntil=0;
+let loginAttempts=0, loginLockedUntil=0;
 
 async function doLogin(){
   const pw=document.getElementById('login-pw').value;
-  if(!pw){
-    // Show hint if no password entered
-    const errEl=document.getElementById('login-error');
-    errEl.textContent='Please enter a password. On first run, type anything.';
-    errEl.style.display='block';
-    return;
-  }
   const errEl=document.getElementById('login-error');
   errEl.style.display='none';
-
-  // Check local lockout
+  if(!pw){errEl.textContent='Please enter a password.';errEl.style.display='block';return;}
   if(Date.now()<loginLockedUntil){
-    const secs=Math.ceil((loginLockedUntil-Date.now())/1000);
-    errEl.textContent=`Too many attempts. Try again in ${secs}s.`;
-    errEl.style.display='block';
-    return;
+    const s=Math.ceil((loginLockedUntil-Date.now())/1000);
+    errEl.textContent=`Too many attempts. Try again in ${s}s.`;errEl.style.display='block';return;
   }
-
+  const btn=document.querySelector('#login-screen .btn.primary');
+  btnLoad(btn,'Signing in…');
   const hash=await sha256(pw);
-  showLoad('Verifying…');
   try{
     const res=await apiGet('verifyPassword',{pw:hash});
-    hideLoad();
+    btnReset(btn);
     if(res&&res.ok){
       loginAttempts=0;
       SESSION={role:res.role,pwHash:hash};
       ssSet(SESSION_KEY,SESSION);
       document.getElementById('login-screen').style.display='none';
       document.getElementById('login-pw').value='';
-      if(res.firstRun){
-        setTimeout(()=>showToast('Welcome! Go to Settings to set your Editor and Viewer passwords.','ok'),800);
-      }
-      startSession();
+      if(res.firstRun)setTimeout(()=>showToast('First time setup — go to Settings to set passwords.','ok'),600);
+      showApp();
     } else if(res&&res.locked){
       loginLockedUntil=Date.now()+10*60*1000;
-      errEl.textContent='Too many failed attempts. Locked for 10 minutes.';
-      errEl.style.display='block';
+      errEl.textContent='Too many failed attempts. Locked for 10 minutes.';errEl.style.display='block';
     } else {
       loginAttempts++;
-      errEl.textContent='Incorrect password. '+(res&&res.attemptsRemaining?res.attemptsRemaining+' attempts remaining.':'');
+      errEl.textContent='Incorrect password.'+(res&&res.attemptsRemaining?' '+res.attemptsRemaining+' attempts remaining.':'');
       errEl.style.display='block';
     }
-  } catch(e){
-    hideLoad();
-    errEl.textContent='Could not connect: '+e.message;
-    errEl.style.display='block';
+  }catch(e){
+    btnReset(btn);
+    errEl.textContent='Could not connect: '+e.message;errEl.style.display='block';
   }
 }
 
@@ -1191,170 +1274,134 @@ async function doUnlock(){
     errEl.style.display='none';
     resetSessionTimer();
   } else {
-    errEl.textContent='Incorrect password.';
-    errEl.style.display='block';
+    errEl.textContent='Incorrect password.';errEl.style.display='block';
   }
 }
 
-function lockApp(){
-  clearSessionTimer();
-  document.getElementById('lock-screen').style.display='flex';
-  document.getElementById('lock-pw').value='';
-  document.getElementById('lock-error').style.display='none';
-}
-
-function resetSessionTimer(){
-  clearSessionTimer();
-  const timeout=(db.settings.sessionTimeout||30)*60*1000;
-  sessionTimer=setTimeout(lockApp,timeout);
-}
+function lockApp(){clearSessionTimer();document.getElementById('lock-screen').style.display='flex';document.getElementById('lock-pw').value='';document.getElementById('lock-error').style.display='none';}
+function resetSessionTimer(){clearSessionTimer();const t=(db.settings.sessionTimeout||30)*60*1000;sessionTimer=setTimeout(lockApp,t);}
 function clearSessionTimer(){clearTimeout(sessionTimer);sessionTimer=null;}
 function refreshSession(){if(sessionTimer)resetSessionTimer();}
 
 function startSession(){
   applyRoleUI();
   resetSessionTimer();
-  // Activity listeners for session reset
-  ['click','keydown','mousemove','touchstart'].forEach(ev=>
-    document.addEventListener(ev,refreshSession,{passive:true}));
-  // Heartbeat every 60s for active user count
+  ['click','keydown','mousemove','touchstart'].forEach(ev=>document.addEventListener(ev,refreshSession,{passive:true}));
   heartbeatTimer=setInterval(()=>sendHeartbeat(),60000);
   sendHeartbeat();
-  // Connection health check every 5 min
   setInterval(()=>pingServer(),5*60*1000);
-  // Queue drain every 30s
-  setInterval(()=>drainQueue(),30000);
+  setInterval(()=>drainQueue(),30*1000);
+  // Auto-sync when tab regains focus
+  document.addEventListener('visibilitychange',()=>{
+    if(!document.hidden)syncNow();
+  });
 }
 
 function applyRoleUI(){
   const isEditor=SESSION.role==='editor';
-  document.querySelectorAll('.editor-only').forEach(el=>{
-    el.style.display=isEditor?'':'none';
-  });
+  document.querySelectorAll('.editor-only').forEach(el=>el.style.display=isEditor?'':'none');
   const rb=document.getElementById('role-badge');
-  if(rb){rb.textContent=SESSION.role;rb.className='badge '+(isEditor?'editor':'viewer');}
+  if(rb){rb.textContent=SESSION.role||'';rb.className='badge '+(isEditor?'editor':'viewer');}
 }
 
 async function sendHeartbeat(){
   try{
     const res=await apiGet('heartbeat',{sessionId});
-    if(res&&res.count!==undefined){
-      const ui=document.getElementById('user-indicator');
-      if(ui&&res.count>1)ui.textContent=res.count+' users online';
-      else if(ui)ui.textContent='';
-    }
+    const ui=document.getElementById('user-indicator');
+    if(ui)ui.textContent=res&&res.count>1?res.count+' users online':'';
   }catch(e){}
 }
 
 async function pingServer(){
-  try{
-    await apiGet('ping');
-    if(pendingQueue.length)drainQueue();
-  }catch(e){setSyncStatus('err','Connection lost');}
+  try{await apiGet('ping');if(pendingQueue.length)drainQueue();}
+  catch(e){setSyncStatus('err','Connection lost');}
 }
 
 async function savePasswords(){
   const edPw=document.getElementById('set-editor-pw').value;
+  const edPw2=document.getElementById('set-editor-pw2').value;
   const viPw=document.getElementById('set-viewer-pw').value;
-  if(!edPw&&!viPw){showToast('Enter at least one password to save','warn');return;}
+  const viPw2=document.getElementById('set-viewer-pw2').value;
+
+  if(!edPw&&!viPw){showToast('Enter a new password to save','warn');return;}
+
+  if(edPw&&edPw!==edPw2){showToast('Editor passwords do not match','error');return;}
+  if(viPw&&viPw!==viPw2){showToast('Viewer passwords do not match','error');return;}
+  if(edPw&&edPw.length<6){showToast('Password must be at least 6 characters','error');return;}
+  if(viPw&&viPw.length<6){showToast('Password must be at least 6 characters','error');return;}
+
+  const btn=document.getElementById('save-pw-btn');
+  btnLoad(btn,'Saving…');
   let saved=0;
+
   if(edPw){
     const hash=await sha256(edPw);
-    const res=await apiGet('setPassword',{role:'editor',pwHash:hash});
+    const res=await apiCall('setPassword',{role:'editor',pwHash:hash});
     if(res&&res.success){
-      // Update session so future calls use new password
-      SESSION.pwHash=hash;
-      ssSet(SESSION_KEY,SESSION);
-      saved++;
+      SESSION.pwHash=hash;ssSet(SESSION_KEY,SESSION);
+      db.settings.editorPwSet=true;saved++;
     }
   }
   if(viPw){
     const hash=await sha256(viPw);
-    const res=await apiGet('setPassword',{role:'viewer',pwHash:hash});
-    if(res&&res.success)saved++;
+    const res=await apiCall('setPassword',{role:'viewer',pwHash:hash});
+    if(res&&res.success){db.settings.viewerPwSet=true;saved++;}
   }
+
+  btnReset(btn);
   if(saved>0){
-    showToast('Password'+(saved>1?'s':'')+' saved! Use your new password next time you log in.','ok');
-    document.getElementById('set-editor-pw').value='';
-    document.getElementById('set-viewer-pw').value='';
+    showToast('Password'+(saved>1?'s':'')+' saved!','ok');
+    ['set-editor-pw','set-editor-pw2','set-viewer-pw','set-viewer-pw2'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.value='';
+    });
+    updatePasswordStatusIndicators();
   } else {
-    showToast('Could not save passwords — check connection','error');
+    showToast('Could not save — check connection','error');
   }
 }
 
-// ── SETUP & CONNECT ──────────────────────────────────────────
+function updatePasswordStatusIndicators(){
+  const ed=document.getElementById('editor-pw-status');
+  const vi=document.getElementById('viewer-pw-status');
+  if(ed)ed.style.display=db.settings.editorPwSet?'block':'none';
+  if(vi)vi.style.display=db.settings.viewerPwSet?'block':'none';
+}
+
+// ── CONNECT & INIT ────────────────────────────────────────────
 async function connectSheet(){
   const url=document.getElementById('setup-url').value.trim();
-  if(!url||!url.includes('script.google.com')){
-    setSetupError('Please enter a valid Google Apps Script URL.');return;
-  }
-  showLoad('Testing connection…');
+  if(!url||!url.includes('script.google.com')){setSetupError('Please enter a valid Apps Script URL.');return;}
+  const btn=document.querySelector('.setup-box .btn.primary');
+  btnLoad(btn,'Connecting…');
   try{
     const res=await fetch(url+'?action=ping');
     if(!res.ok)throw new Error('HTTP '+res.status);
-    const text=await res.text();
-    let data;
-    try{ data=JSON.parse(text); } catch(e){ throw new Error('Invalid response from Apps Script'); }
-    if(!data.ok&&!data.time)throw new Error('Unexpected response from Apps Script');
+    const data=JSON.parse(await res.text());
+    if(!data.ok&&!data.time)throw new Error('Unexpected response');
     API_URL=url;
     lsSet(CFG_KEY,{apiUrl:url});
-    hideLoad();
-    // Show login screen directly — no extra API calls
+    btnReset(btn);
+    // Check if passwords are set before showing first-run notice
+    const vr=await fetch(url+'?action=verifyPassword&data='+encodeURIComponent(JSON.stringify({pw:'0'.repeat(64)})));
+    const vd=JSON.parse(await vr.text());
     document.getElementById('setup-screen').style.display='none';
     document.getElementById('login-screen').style.display='flex';
-    document.getElementById('first-run-notice').style.display='flex';
+    const notice=document.getElementById('first-run-notice');
+    if(notice)notice.style.display=(vd&&vd.firstRun)?'flex':'none';
     setTimeout(()=>document.getElementById('login-pw').focus(),100);
-  } catch(e){
-    hideLoad();
-    setSetupError('Could not connect: '+e.message+'. Make sure deployment access is set to "Anyone".');
+  }catch(e){
+    btnReset(btn);
+    setSetupError('Could not connect: '+e.message+'. Make sure access is set to "Anyone".');
   }
 }
 
-function setSetupError(msg){
-  const el=document.getElementById('setup-error');
-  if(el){el.textContent=msg;el.style.display='block';}
-}
-
-function disconnectSheet(){
-  if(!confirm('Disconnect? Your Google Sheets data is safe.'))return;
-  localStorage.removeItem(CFG_KEY);
-  localStorage.removeItem(CACHE_KEY);
-  location.reload();
-}
-
-// ── INIT ─────────────────────────────────────────────────────
-async function init(){
-  // Load offline queue
-  pendingQueue=lsGet('gfip_queue')||[];
-
-  const cfg=lsGet(CFG_KEY);
-  if(!cfg||!cfg.apiUrl){
-    hideLoad();
-    document.getElementById('setup-screen').style.display='flex';
-    return;
-  }
-  API_URL=cfg.apiUrl;
-
-  // Restore session if available
-  const sess=ssGet(SESSION_KEY);
-  if(sess&&sess.pwHash&&sess.role){
-    SESSION=sess;
-    // Load cached data for instant display
-    const cached=lsGet(CACHE_KEY);
-    if(cached)applyLoadedData(cached);
-    showApp();
-    // Then load fresh from Sheets
-    await loadFromSheets();
-    renderAll();
-  } else {
-    hideLoad();
-    showLoginScreen();
-  }
-}
+function setSetupError(msg){const el=document.getElementById('setup-error');if(el){el.textContent=msg;el.style.display='block';}}
 
 function showLoginScreen(){
   document.getElementById('login-screen').style.display='flex';
-  document.getElementById('first-run-notice').style.display='flex';
+  // Always hide first-run notice — it's shown contextually
+  const notice=document.getElementById('first-run-notice');
+  if(notice)notice.style.display='none';
   setTimeout(()=>document.getElementById('login-pw').focus(),100);
 }
 
@@ -1363,9 +1410,35 @@ function showApp(){
   document.getElementById('setup-screen').style.display='none';
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='flex';
-  applyRoleUI();
   startSession();
   renderAll();
+}
+
+function disconnectSheet(){
+  if(!confirm('Disconnect? Your Google Sheets data is safe.'))return;
+  localStorage.removeItem(CFG_KEY);localStorage.removeItem(CACHE_KEY);
+  location.reload();
+}
+
+async function init(){
+  pendingQueue=lsGet('gfip_queue')||[];
+  const cfg=lsGet(CFG_KEY);
+  if(!cfg||!cfg.apiUrl){hideLoad();document.getElementById('setup-screen').style.display='flex';return;}
+  API_URL=cfg.apiUrl;
+  const sess=ssGet(SESSION_KEY);
+  if(sess&&sess.pwHash&&sess.role){
+    SESSION=sess;
+    const cached=lsGet(CACHE_KEY);
+    if(cached)applyLoadedData(cached);
+    showApp();           // Show app immediately with cached data
+    showLoad('Syncing latest data…');
+    await loadFromSheets();  // Then refresh from Sheets
+    hideLoad();
+    renderAll();
+  } else {
+    hideLoad();
+    showLoginScreen();
+  }
 }
 
 // ── TABS ─────────────────────────────────────────────────────
@@ -1380,21 +1453,56 @@ function switchTab(tab){
 }
 document.querySelectorAll('.nav-item').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 
-// ── RENDER ALL ────────────────────────────────────────────────
 function renderAll(){
   renderDashboard();
   buildDocHead();renderDocs();
   renderTracker();
   renderCompanies();
   renderReminders();
-  renderSettings();
   updateReminderBadge();
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────
-let activeDashFilter=''; // 'active','expiring','expired','noexpiry','missing',''
+function renderDashboard(){
+  const docs=db.documents;
 
-function dashFilter_fn(el){
+  // Counts from documents
+  const active=docs.filter(d=>getStatus(d)==='active').length;
+  const expiring=docs.filter(d=>getStatus(d)==='expiring').length;
+  const expired=docs.filter(d=>getStatus(d)==='expired').length;
+  const noexpiry=docs.filter(d=>getStatus(d)==='noexpiry').length;
+
+  // Companies: count from companies array + any in documents not in companies list
+  const coFromDb=new Set(db.companies.map(c=>c.name));
+  const coFromDocs=new Set(docs.map(d=>d.company).filter(Boolean));
+  const allCos=new Set([...coFromDb,...coFromDocs]);
+  const companies=allCos.size;
+
+  // Vessels: count from companies vessel lists + any in documents not registered
+  const vesFromDb=new Set();
+  db.companies.forEach(co=>(co.vessels||[]).forEach(v=>vesFromDb.add((v.name||v)+'|||'+co.name)));
+  const vesFromDocs=new Set(docs.map(d=>d.vessel&&d.company?d.vessel+'|||'+d.company:'').filter(Boolean));
+  const allVes=new Set([...vesFromDb,...vesFromDocs]);
+  const vessels=allVes.size;
+
+  // Missing vessels
+  const vesKeys=[...allVes];
+  const missingVessels=vesKeys.filter(k=>{const[v,c]=k.split('|||');return getVesselDocStatus(v,c)!=='complete';}).length;
+
+  setText('ds-active',active);setText('ds-expiring',expiring);
+  setText('ds-expired',expired);setText('ds-noexpiry',noexpiry);
+  setText('ds-companies',companies);setText('ds-vessels',vessels);
+  setText('ds-missing',missingVessels);
+
+  const alertEl=document.getElementById('dash-alert');
+  const bad=expiring+expired;
+  alertEl.innerHTML=bad>0?`<div class="alert"><i class="ti ti-alert-triangle"></i>${bad} document(s) are expired or expiring within 90 days.</div>`:'';
+
+  renderDashMissing();
+  renderDashTable();
+}
+
+function dashFilter(el){
   const f=el.dataset.filter;
   if(activeDashFilter===f){clearDashFilter();return;}
   activeDashFilter=f;
@@ -1402,10 +1510,10 @@ function dashFilter_fn(el){
   el.classList.add('active-filter');
   document.getElementById('dash-clear-filter').style.display='';
   document.getElementById('dash-table-title').textContent=
-    f==='missing'?'Vessels with missing documents':'Filtered documents — '+statusLabel(f);
+    f==='missing'?'Vessels with missing documents':'Filtered: '+statusLabel(f);
   renderDashTable();
 }
-function dashFilter(el){dashFilter_fn(el);}
+
 function clearDashFilter(){
   activeDashFilter='';
   document.querySelectorAll('.stat-card').forEach(c=>c.classList.remove('active-filter'));
@@ -1414,45 +1522,10 @@ function clearDashFilter(){
   renderDashTable();
 }
 
-function renderDashboard(){
-  const docs=db.documents;
-  const active=docs.filter(d=>getStatus(d)==='active').length;
-  const expiring=docs.filter(d=>getStatus(d)==='expiring').length;
-  const expired=docs.filter(d=>getStatus(d)==='expired').length;
-  const noexpiry=docs.filter(d=>getStatus(d)==='noexpiry').length;
-  const companies=new Set(docs.map(d=>d.company).filter(Boolean)).size;
-  const vessels=new Set(docs.map(d=>d.vessel+'|'+d.company).filter(k=>k!=='|')).size;
-
-  // Missing vessels
-  const vesselKeys=[...new Set(docs.map(d=>d.vessel+'|||'+d.company).filter(k=>k!=='|||'))];
-  const missingVessels=vesselKeys.filter(k=>{
-    const[v,c]=k.split('|||');return getVesselDocStatus(v,c)!=='complete';
-  }).length;
-
-  setText('ds-active',active);
-  setText('ds-expiring',expiring);
-  setText('ds-expired',expired);
-  setText('ds-noexpiry',noexpiry);
-  setText('ds-companies',companies);
-  setText('ds-vessels',vessels);
-  setText('ds-missing',missingVessels);
-
-  // Alert bar
-  const alertEl=document.getElementById('dash-alert');
-  const bad=expiring+expired;
-  alertEl.innerHTML=bad>0
-    ?`<div class="alert"><i class="ti ti-alert-triangle"></i>${bad} document(s) are expired or expiring within 90 days.</div>`
-    :'';
-
-  // Missing documents summary
-  renderDashMissing();
-  renderDashTable();
-}
-
 function renderDashMissing(){
   const el=document.getElementById('dash-missing-list');
-  const vesselKeys=[...new Set(db.documents.map(d=>d.vessel+'|||'+d.company).filter(k=>k!=='|||'))];
-  const incomplete=vesselKeys.map(k=>{
+  const vesKeys=getAllVesselKeys();
+  const incomplete=vesKeys.map(k=>{
     const[v,c]=k.split('|||');
     const st=getVesselDocStatus(v,c);
     const{have,total}=getVesselCounts(v,c);
@@ -1468,25 +1541,34 @@ function renderDashMissing(){
   if(incomplete.length>6)el.innerHTML+=`<div style="font-size:11px;color:var(--text2);padding:4px 2px">+${incomplete.length-6} more…</div>`;
 }
 
+function getAllVesselKeys(){
+  const s=new Set();
+  db.companies.forEach(co=>(co.vessels||[]).forEach(v=>s.add((v.name||v)+'|||'+co.name)));
+  db.documents.forEach(d=>{if(d.vessel&&d.company)s.add(d.vessel+'|||'+d.company);});
+  return[...s];
+}
+
 function renderDashTable(){
   const tb=document.getElementById('dash-tbody');
   let rows;
 
   if(activeDashFilter==='missing'){
-    // Show missing vessel summary instead of doc table
-    const vesselKeys=[...new Set(db.documents.map(d=>d.vessel+'|||'+d.company).filter(k=>k!=='|||'))];
-    const incomplete=vesselKeys.map(k=>{
+    const vesKeys=getAllVesselKeys();
+    const incomplete=vesKeys.map(k=>{
       const[v,c]=k.split('|||');
       const{have,total}=getVesselCounts(v,c);
-      const vtype=db.documents.find(d=>d.vessel===v&&d.company===c)?.vtype||'';
+      const vtype=db.documents.find(d=>d.vessel===v&&d.company===c)?.vtype||getVtypeFromCompanies(v,c);
       return{vessel:v,company:c,vtype,have,total};
     }).filter(x=>x.have<x.total).sort((a,b)=>a.have-b.have);
-
     if(!incomplete.length){tb.innerHTML='<tr><td colspan="8" class="empty">No missing documents</td></tr>';return;}
     tb.innerHTML=incomplete.map(x=>{
       const pct=Math.round(x.have/x.total*100);
-      const col=pct===0?'var(--red)':pct<50?'var(--red)':'var(--amber)';
-      return`<tr><td title="${escH(x.company)}">${escH(x.company)}</td><td title="${escH(x.vessel)}">${escH(x.vessel)}</td><td>${escH(x.vtype||'—')}</td><td colspan="2"><div class="prog-wrap"><div class="prog-bar" style="flex:1"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div><span style="font-size:11px;font-weight:700;color:${col};min-width:36px">${x.have}/${x.total}</span></div></td><td>—</td><td><span class="badge ${x.have===0?'missing':'partial'}">${x.have===0?'Missing':'Partial'}</span></td><td><button class="ib e" onclick="switchTab('tracker')" title="View in tracker"><i class="ti ti-ship"></i></button></td></tr>`;
+      const col=pct===0?'var(--red)':'var(--amber)';
+      return`<tr><td>${escH(x.company)}</td><td>${escH(x.vessel)}</td><td>${escH(x.vtype||'—')}</td>
+        <td colspan="2"><div class="prog-wrap"><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${col}"></div></div>
+        <span style="font-size:11px;font-weight:700;color:${col};min-width:36px">${x.have}/${x.total}</span></div></td>
+        <td>—</td><td><span class="badge ${x.have===0?'missing':'partial'}">${x.have===0?'Missing':'Partial'}</span></td>
+        <td><button class="ib e" onclick="switchTab('tracker')"><i class="ti ti-ship"></i></button></td></tr>`;
     }).join('');
     return;
   }
@@ -1501,9 +1583,10 @@ function renderDashTable(){
   if(!rows.length){tb.innerHTML='<tr><td colspan="8" class="empty">No documents in this category</td></tr>';return;}
   tb.innerHTML=rows.map(d=>{
     const st=getStatus(d);const dl=daysLeft(d.expiry);
-    const dlTxt=d.noExpiry?'—':dl<0?'Overdue':dl+'d';
+    // Show days overdue instead of "Overdue"
+    const dlTxt=d.noExpiry?'—':dl<0?Math.abs(dl)+'d overdue':dl+'d';
     const dlCol=d.noExpiry?'':dl<0?'var(--red)':dl<=30?'var(--red)':'var(--amber)';
-    const lb=d.link?`<a href="${escH(d.link)}" target="_blank" style="color:var(--blue)"><i class="ti ti-external-link" style="font-size:13px"></i></a>`:'—';
+    const lb=d.link?`<a href="${escH(d.link)}" target="_blank" title="${escH(d.link)}" style="color:var(--blue)"><i class="ti ti-external-link"></i></a>`:'—';
     const fb=d.driveFileUrl?`<a href="${escH(d.driveFileUrl)}" target="_blank" style="color:var(--blue)" title="${escH(d.driveFileName||'File')}"><i class="ti ti-file"></i></a>`:'—';
     return`<tr>
       <td title="${escH(d.company)}">${escH(d.company)}</td>
@@ -1522,42 +1605,51 @@ function renderDashTable(){
 }
 
 function setText(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
+function getVtypeFromCompanies(vessel,company){
+  const co=db.companies.find(c=>c.name===company);
+  const v=(co?.vessels||[]).find(ve=>(ve.name||ve)===vessel);
+  return v?.vtype||'';
+}
 
-// ── DOCUMENTS TAB ────────────────────────────────────────────
+// ── DOCUMENTS TAB ─────────────────────────────────────────────
 function buildDocHead(){
   const tr=document.getElementById('doc-thead');if(!tr)return;
   tr.innerHTML=DOC_COLS_DEF.map(c=>{
     const isSorted=sortCol===c.key;
     if(c.nosort)return`<th class="nosort" style="width:${c.w}">${c.label}</th>`;
     return`<th style="width:${c.w}" class="${isSorted?'sorted':''}" onclick="sortBy('${c.key}')">
-      ${c.label} <span class="si">${isSorted?(sortDir===1?'▲':'▼'):'⇅'}</span></th>`;
+      ${c.label}<span class="si">${isSorted?(sortDir===1?'▲':'▼'):'⇅'}</span></th>`;
   }).join('');
 }
 function sortBy(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}buildDocHead();renderDocRows();}
 
 function populateDocFilters(){
   const cos=[...new Set(db.documents.map(d=>d.company).filter(Boolean))].sort();
-  const sel=(id,cv,opts)=>{const el=document.getElementById(id);if(!el)return;el.innerHTML=opts;el.value=cv;};
-  sel('f-company',document.getElementById('f-company')?.value||'',
+  db.companies.forEach(c=>{if(!cos.includes(c.name))cos.push(c.name);});cos.sort();
+  const sel=(id,cv,opts)=>{const el=document.getElementById(id);if(!el)return;el.innerHTML=opts;if(cv)el.value=cv;};
+  sel('f-company',document.getElementById('f-company')?.value,
     '<option value="">All companies</option>'+cos.map(c=>`<option value="${escH(c)}">${escH(c)}</option>`).join(''));
   const fc=document.getElementById('f-company')?.value||'';
-  const vessels=getFilteredVesselList(fc,'documents');
-  sel('f-vessel',document.getElementById('f-vessel')?.value||'',
+  const vessels=getFilteredVesselList(fc);
+  sel('f-vessel',document.getElementById('f-vessel')?.value,
     '<option value="">All vessels</option>'+vessels.map(v=>`<option value="${escH(v)}">${escH(v)}</option>`).join(''));
   const vtypes=[...new Set([...db.vTypes,...db.documents.map(d=>d.vtype).filter(Boolean)])].sort();
-  sel('f-vtype',document.getElementById('f-vtype')?.value||'',
+  sel('f-vtype',document.getElementById('f-vtype')?.value,
     '<option value="">All vessel types</option>'+vtypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join(''));
-  sel('f-type',document.getElementById('f-type')?.value||'',
+  sel('f-type',document.getElementById('f-type')?.value,
     '<option value="">All document types</option>'+db.licTypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join(''));
 }
 
-function getFilteredVesselList(coFilter, ctx='documents'){
+function getFilteredVesselList(coFilter){
   if(coFilter){
     const co=db.companies.find(c=>c.name===coFilter);
-    if(co&&co.vessels&&co.vessels.length)return co.vessels.map(v=>v.name||v).filter(Boolean);
-    return[...new Set(db.documents.filter(d=>d.company===coFilter).map(d=>d.vessel).filter(Boolean))].sort();
+    const fromCo=(co?.vessels||[]).map(v=>v.name||v);
+    const fromDocs=[...new Set(db.documents.filter(d=>d.company===coFilter).map(d=>d.vessel).filter(Boolean))];
+    return[...new Set([...fromCo,...fromDocs])].sort();
   }
-  return[...new Set(db.documents.map(d=>d.vessel).filter(Boolean))].sort();
+  const fromCos=[];db.companies.forEach(co=>(co.vessels||[]).forEach(v=>fromCos.push(v.name||v)));
+  const fromDocs=db.documents.map(d=>d.vessel).filter(Boolean);
+  return[...new Set([...fromCos,...fromDocs])].sort();
 }
 
 function onDocCompanyFilter(){
@@ -1565,30 +1657,27 @@ function onDocCompanyFilter(){
   const fv=document.getElementById('f-vessel');if(!fv)return;
   const vessels=getFilteredVesselList(fc);
   fv.innerHTML='<option value="">All vessels</option>'+vessels.map(v=>`<option value="${escH(v)}">${escH(v)}</option>`).join('');
-  renderDocs();
+  renderDocRows();
 }
 
 function getStatusFilters(){
-  const checks=['ms-active','ms-expiring','ms-expired','ms-noexpiry'];
-  const sel=checks.map(id=>document.getElementById(id)?.checked?document.getElementById(id).value:null).filter(Boolean);
-  // Update label
+  const ids=['ms-active','ms-expiring','ms-expired','ms-noexpiry'];
+  const sel=ids.map(id=>document.getElementById(id)?.checked?document.getElementById(id).value:null).filter(Boolean);
   const lbl=document.getElementById('ms-label');
-  if(lbl)lbl.textContent=sel.length===0||sel.length===4?'All statuses':sel.map(s=>statusLabel(s)).join(', ');
+  if(lbl)lbl.textContent=sel.length===0||sel.length===4?'All statuses':sel.map(statusLabel).join(', ');
   return sel;
 }
 
 function toggleMultiSelect(e){
   e.stopPropagation();
-  const dd=document.getElementById('ms-dropdown');
-  if(dd)dd.classList.toggle('open');
+  document.getElementById('ms-dropdown')?.classList.toggle('open');
 }
 document.addEventListener('click',e=>{
   const dd=document.getElementById('ms-dropdown');
   if(dd&&!dd.closest('.multi-select-wrap')?.contains(e.target))dd.classList.remove('open');
 });
 
-function renderDocs(){populateDocFilters();updateMsLabel();renderDocRows();}
-function updateMsLabel(){getStatusFilters();}
+function renderDocs(){populateDocFilters();getStatusFilters();renderDocRows();}
 
 function getFilteredDocs(){
   const q=(document.getElementById('f-search')?.value||'').toLowerCase();
@@ -1607,11 +1696,10 @@ function getFilteredDocs(){
     const mvt=!fvt||d.vtype===fvt;
     const mt=!ft||d.type===ft;
     const ms=!statuses.length||statuses.includes(getStatus(d));
-    // If date range is set, exclude noExpiry docs
     const hasDateFilter=dfrom||dto;
-    if(hasDateFilter&&(d.noExpiry===true||d.noExpiry==='TRUE'))return false;
-    const mdf=!dfrom||!d.expiry||(d.expiry>=dfrom);
-    const mdt=!dto||!d.expiry||(d.expiry<=dto);
+    if(hasDateFilter&&(toBool(d.noExpiry)||!d.expiry))return false;
+    const mdf=!dfrom||!d.expiry||d.expiry>=dfrom;
+    const mdt=!dto||!d.expiry||d.expiry<=dto;
     return mq&&mc&&mv&&mvt&&mt&&ms&&mdf&&mdt;
   });
 }
@@ -1629,26 +1717,26 @@ function renderDocRows(){
   const isEditor=SESSION.role==='editor';
   tb.innerHTML=rows.map(d=>{
     const st=getStatus(d);
+    const dl=daysLeft(d.expiry);
     const hc=(d.history||[]).length;
     const hb=hc?`<span style="background:var(--purple-bg);color:var(--purple);font-size:9px;padding:1px 5px;border-radius:10px;margin-left:3px;font-weight:700">${hc}v</span>`:'';
-    const fb=d.driveFileUrl
-      ?`<a href="${escH(d.driveFileUrl)}" target="_blank" style="color:var(--blue)" title="${escH(d.driveFileName||'File')}"><i class="ti ti-file"></i></a>`
-      :'<span style="color:var(--text3);font-size:10px">—</span>';
-    const lb=d.link
-      ?`<a href="${escH(d.link)}" target="_blank" style="color:var(--blue)"><i class="ti ti-external-link" style="font-size:13px"></i></a>`
-      :'<span style="color:var(--text3);font-size:10px">—</span>';
+    const fb=d.driveFileUrl?`<a href="${escH(d.driveFileUrl)}" target="_blank" style="color:var(--blue)" title="${escH(d.driveFileName||'File')}"><i class="ti ti-file"></i></a>`:'<span style="color:var(--text3)">—</span>';
+    const lb=d.link?`<a href="${escH(d.link)}" target="_blank" style="color:var(--blue)" title="${escH(d.link)}"><i class="ti ti-external-link"></i></a>`:'<span style="color:var(--text3)">—</span>';
+    // Color expiry cell
+    const expCol=st==='expired'?'color:var(--red);font-weight:600':st==='expiring'?'color:var(--amber);font-weight:600':'';
+    const dlTxt=toBool(d.noExpiry)?'—':dl<0?Math.abs(dl)+'d overdue':dl+'d';
     const isSel=selectedDocs.has(d.id);
-    return`<tr class="${isSel?'selected':''}">
-      <td><input type="checkbox" ${isSel?'checked':''} onchange="toggleDocSel('${d.id}',this.checked)" style="cursor:pointer"></td>
+    return`<tr class="${isSel?'selected':''}" style="cursor:pointer" onclick="viewDocDetail('${d.id}')">
+      <td onclick="event.stopPropagation()"><input type="checkbox" ${isSel?'checked':''} onchange="toggleDocSel('${d.id}',this.checked)" style="cursor:pointer"></td>
       <td title="${escH(d.company)}">${escH(d.company)}</td>
       <td title="${escH(d.vessel||'')}">${escH(d.vessel||'—')}</td>
       <td>${escH(d.vtype||'—')}</td>
       <td title="${escH(d.type)}">${escH(d.type)}</td>
       <td title="${escH(d.num||'')}">${escH(d.num||'—')}${hb}</td>
-      <td>${d.noExpiry?'—':fmtDate(d.expiry)}</td>
+      <td style="${expCol}">${toBool(d.noExpiry)?'No expiry':fmtDate(d.expiry)}</td>
       <td><span class="badge ${st}">${statusLabel(st)}</span></td>
       <td>${fb}</td><td>${lb}</td>
-      <td><div class="act-btns">
+      <td onclick="event.stopPropagation()"><div class="act-btns">
         ${isEditor?`<button class="ib e" onclick="editDoc('${d.id}')" title="Edit/renew"><i class="ti ti-edit"></i></button>`:''}
         <button class="ib" onclick="sendReminderDoc('${d.id}')" title="Send reminder"><i class="ti ti-mail"></i></button>
         ${isEditor?`<button class="ib d" onclick="delDoc('${d.id}')" title="Delete"><i class="ti ti-trash"></i></button>`:''}
@@ -1657,43 +1745,98 @@ function renderDocRows(){
   }).join('');
 }
 
-// Selection
-function toggleDocSel(id,checked){
-  if(checked)selectedDocs.add(id);else selectedDocs.delete(id);
-  updateBulkBar();
-  renderDocRows();
-}
+function toggleDocSel(id,checked){if(checked)selectedDocs.add(id);else selectedDocs.delete(id);updateBulkBar();renderDocRows();}
 function updateBulkBar(){
-  const bar=document.getElementById('bulk-bar');
-  const cnt=document.getElementById('bulk-count');
-  if(bar){bar.style.display=selectedDocs.size>0?'':'none';}
+  const bar=document.getElementById('bulk-bar');const cnt=document.getElementById('bulk-count');
+  if(bar)bar.style.display=selectedDocs.size>0?'':'none';
   if(cnt)cnt.textContent=selectedDocs.size;
 }
 function clearSelection(){selectedDocs.clear();updateBulkBar();renderDocRows();}
-function bulkReminder(){
-  selectedDocs.forEach(id=>sendReminderDoc(id));
-  showToast('Reminder emails opened for '+selectedDocs.size+' documents.','ok');
-}
-function bulkExport(){
-  const sel=[...selectedDocs].map(id=>db.documents.find(d=>d.id===id)).filter(Boolean);
-  exportExcelData(sel);
+function bulkReminder(){selectedDocs.forEach(id=>sendReminderDoc(id));showToast('Reminder emails opened for '+selectedDocs.size+' documents.','ok');}
+function bulkExport(){exportExcelData([...selectedDocs].map(id=>db.documents.find(d=>d.id===id)).filter(Boolean));}
+
+// ── VIEW DOCUMENT DETAIL ──────────────────────────────────────
+function viewDocDetail(id){
+  const d=db.documents.find(x=>x.id===id);if(!d)return;
+  const st=getStatus(d);
+  const dl=daysLeft(d.expiry);
+  const dlTxt=toBool(d.noExpiry)?'Does not expire':dl<0?Math.abs(dl)+' days overdue':dl+' days remaining';
+  const dlCol=toBool(d.noExpiry)?'var(--text2)':dl<0?'var(--red)':dl<=30?'var(--red)':dl<=90?'var(--amber)':'var(--green)';
+  const hist=(d.history||[]);
+  const histHtml=hist.length?`
+    <div style="margin-top:1rem;padding-top:1rem;border-top:0.5px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px"><i class="ti ti-history"></i> Previous versions (${hist.length})</div>
+      ${hist.slice().reverse().map((h,i)=>`
+        <div style="background:var(--surface2);border-radius:var(--r);padding:8px 12px;margin-bottom:6px;font-size:12px">
+          <div style="font-weight:600">${escH(h.num||'No number')} — Expiry: ${fmtDate(h.expiry)}</div>
+          <div style="color:var(--text2);margin-top:2px">Issue date: ${fmtDate(h.issued)} · Saved: ${fmtDate(h.savedAt)}</div>
+          ${h.notes?`<div style="color:var(--text2);margin-top:2px">${escH(h.notes)}</div>`:''}
+          ${h.link?`<div style="margin-top:2px"><a href="${escH(h.link)}" target="_blank">Reference ↗</a></div>`:''}
+          ${h.driveFileUrl?`<div style="margin-top:2px"><a href="${escH(h.driveFileUrl)}" target="_blank"><i class="ti ti-file"></i> ${escH(h.driveFileName||'File')} ↗</a></div>`:''}
+        </div>`).join('')}
+    </div>`:'';
+
+  const modalHtml=`<div class="modal-bg" id="view-doc-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem;z-index:200;overflow-y:auto">
+    <div class="modal" style="pointer-events:all;max-width:580px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem">
+        <div>
+          <h2 style="font-size:15px;font-weight:700;margin-bottom:3px">${escH(d.type)}</h2>
+          <div style="font-size:12px;color:var(--text2)">${escH(d.company)} · ${escH(d.vessel||'—')} · ${escH(d.vtype||'—')}</div>
+        </div>
+        <span class="badge ${st}">${statusLabel(st)}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1rem">
+        <div style="background:var(--surface2);border-radius:var(--r);padding:10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:3px">Document number</div>
+          <div style="font-size:13px;font-weight:600">${escH(d.num||'—')}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--r);padding:10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:3px">Issue date</div>
+          <div style="font-size:13px;font-weight:600">${fmtDate(d.issued)}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--r);padding:10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:3px">Expiry date</div>
+          <div style="font-size:13px;font-weight:600;color:${dlCol}">${toBool(d.noExpiry)?'Does not expire':fmtDate(d.expiry)}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:var(--r);padding:10px">
+          <div style="font-size:10px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:3px">Time remaining</div>
+          <div style="font-size:13px;font-weight:600;color:${dlCol}">${dlTxt}</div>
+        </div>
+      </div>
+      ${d.notes?`<div style="margin-bottom:.75rem;font-size:12px;color:var(--text2)"><b>Notes:</b> ${escH(d.notes)}</div>`:''}
+      ${d.link?`<div style="margin-bottom:.75rem;font-size:12px"><b>Reference:</b> <a href="${escH(d.link)}" target="_blank">${escH(d.link)} ↗</a></div>`:''}
+      ${d.driveFileUrl?`<div style="margin-bottom:.75rem;font-size:12px"><b>File:</b> <a href="${escH(d.driveFileUrl)}" target="_blank"><i class="ti ti-file"></i> ${escH(d.driveFileName||'Attached file')} ↗</a></div>`:''}
+      ${histHtml}
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="document.getElementById('view-doc-modal').remove()">Close</button>
+        ${SESSION.role==='editor'?`<button type="button" class="btn primary" onclick="document.getElementById('view-doc-modal').remove();editDoc('${d.id}')"><i class="ti ti-edit"></i> Update document</button>`:''}
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend',modalHtml);
+  document.getElementById('view-doc-modal').addEventListener('mousedown',function(e){if(e.target===this)this.remove();});
 }
 
 // ── DOCUMENT TRACKER ──────────────────────────────────────────
 function getRequiredTypes(vtype){
-  // Use docRules if the vessel type has been explicitly configured
   if(db.docRules&&db.docRules.hasOwnProperty(vtype)){
-    return db.docRules[vtype].length ? db.docRules[vtype] : db.licTypes;
+    return db.docRules[vtype].length?db.docRules[vtype]:db.licTypes;
   }
-  // Fallback: all licTypes
   return db.licTypes;
 }
 
+function getVesselVtype(vessel,company){
+  // First check documents
+  const doc=db.documents.find(d=>d.vessel===vessel&&d.company===company&&d.vtype);
+  if(doc)return doc.vtype;
+  // Then check companies list
+  return getVtypeFromCompanies(vessel,company);
+}
+
 function getVesselDocStatus(vessel,company){
-  const vl=db.documents.filter(d=>d.vessel===vessel&&d.company===company);
-  const vtype=vl[0]?.vtype||'';
+  const vtype=getVesselVtype(vessel,company);
   const req=getRequiredTypes(vtype);
-  const has=new Set(vl.map(d=>d.type));
+  const has=new Set(db.documents.filter(d=>d.vessel===vessel&&d.company===company).map(d=>d.type));
   const missing=req.filter(t=>!has.has(t));
   if(missing.length===0)return'complete';
   if(missing.length===req.length)return'missing';
@@ -1701,20 +1844,27 @@ function getVesselDocStatus(vessel,company){
 }
 
 function getVesselCounts(vessel,company){
-  const vl=db.documents.filter(d=>d.vessel===vessel&&d.company===company);
-  const vtype=vl[0]?.vtype||'';
+  const vtype=getVesselVtype(vessel,company);
   const req=getRequiredTypes(vtype);
-  const has=new Set(vl.map(d=>d.type));
+  const has=new Set(db.documents.filter(d=>d.vessel===vessel&&d.company===company).map(d=>d.type));
   return{have:req.filter(t=>has.has(t)).length,total:req.length};
 }
 
 function populateTrackerFilters(){
-  const cos=[...new Set(db.documents.map(d=>d.company).filter(Boolean))].sort();
-  // Also add companies from companies tab that might have no docs yet
-  db.companies.forEach(c=>{if(!cos.includes(c.name))cos.push(c.name);});
-  cos.sort();
+  const cos=[...new Set([...db.companies.map(c=>c.name),...db.documents.map(d=>d.company).filter(Boolean)])].sort();
   const tc=document.getElementById('t-company');
   if(tc){const cv=tc.value;tc.innerHTML='<option value="">All companies</option>'+cos.map(c=>`<option value="${escH(c)}">${escH(c)}</option>`).join('');tc.value=cv;}
+
+  // Populate vessel dropdown — all vessels from companies + documents
+  const tv=document.getElementById('t-vessel');
+  if(tv){
+    const cv=tv.value;
+    const fc=document.getElementById('t-company')?.value||'';
+    const vessels=getFilteredVesselList(fc);
+    tv.innerHTML='<option value="">All vessels</option>'+vessels.map(v=>`<option value="${escH(v)}">${escH(v)}</option>`).join('');
+    if(cv)tv.value=cv;
+  }
+
   const tvt=document.getElementById('t-vtype');
   if(tvt){const cv=tvt.value;const vt=[...new Set([...db.vTypes,...db.documents.map(d=>d.vtype).filter(Boolean)])].sort();tvt.innerHTML='<option value="">All vessel types</option>'+vt.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');tvt.value=cv;}
 }
@@ -1723,7 +1873,7 @@ function onTrackerCompanyFilter(){
   const fc=document.getElementById('t-company').value;
   const tv=document.getElementById('t-vessel');
   if(tv){
-    const vessels=getFilteredVesselList(fc,'tracker');
+    const vessels=getFilteredVesselList(fc);
     tv.innerHTML='<option value="">All vessels</option>'+vessels.map(v=>`<option value="${escH(v)}">${escH(v)}</option>`).join('');
   }
   renderTracker();
@@ -1736,23 +1886,13 @@ function renderTracker(){
   const fvt=document.getElementById('t-vtype')?.value||'';
   const fds=document.getElementById('t-status')?.value||'';
 
-  // Build vessel map from documents
+  // Build vessel map
   const vesselMap={};
-  db.documents.forEach(d=>{
-    if(!d.vessel)return;
-    const key=d.vessel+'|||'+d.company;
-    if(!vesselMap[key])vesselMap[key]={vessel:d.vessel,company:d.company,vtype:d.vtype||'',docs:[]};
-    vesselMap[key].docs.push(d);
-    if(d.vtype)vesselMap[key].vtype=d.vtype;
-  });
-  // Also include vessels from companies with no docs
-  db.companies.forEach(co=>{
-    (co.vessels||[]).forEach(v=>{
-      const vname=v.name||v;const vt=v.vtype||v.type||'';
-      const key=vname+'|||'+co.name;
-      if(!vesselMap[key])vesselMap[key]={vessel:vname,company:co.name,vtype:vt,docs:[]};
-      if(!vesselMap[key].vtype&&vt)vesselMap[key].vtype=vt;
-    });
+  getAllVesselKeys().forEach(k=>{
+    const[vessel,company]=k.split('|||');
+    const vtype=getVesselVtype(vessel,company);
+    const docs=db.documents.filter(d=>d.vessel===vessel&&d.company===company);
+    vesselMap[k]={vessel,company,vtype,docs};
   });
 
   let entries=Object.values(vesselMap);
@@ -1762,7 +1902,7 @@ function renderTracker(){
   if(fds)entries=entries.filter(e=>getVesselDocStatus(e.vessel,e.company)===fds);
 
   const el=document.getElementById('tracker-list');
-  if(!entries.length){el.innerHTML='<div class="empty">No vessels found. Add companies and vessels to get started.</div>';return;}
+  if(!entries.length){el.innerHTML='<div class="empty">No vessels found. Add companies and vessels first.</div>';return;}
 
   el.innerHTML=entries.map(e=>{
     const ds=getVesselDocStatus(e.vessel,e.company);
@@ -1770,7 +1910,6 @@ function renderTracker(){
     const pct=total>0?Math.round(have/total*100):0;
     const pColor=pct===100?'var(--green)':pct>=50?'var(--amber)':'var(--red)';
     const req=getRequiredTypes(e.vtype);
-    const hasTypes=new Set(e.docs.map(d=>d.type));
 
     const docItems=req.map(t=>{
       const existing=e.docs.find(d=>d.type===t);
@@ -1778,9 +1917,9 @@ function renderTracker(){
       const cls=st==='active'||st==='noexpiry'?'has':st==='expiring'||st==='expired'?'expired-doc':'missing';
       const icon=cls==='has'?'ti-circle-check':cls==='expired-doc'?'ti-alert-circle':'ti-circle-plus';
       const sub=existing
-        ?`${existing.num?existing.num+' · ':''}${existing.noExpiry?'No expiry':fmtDate(existing.expiry)}`
+        ?`${existing.num?existing.num+' · ':''}${toBool(existing.noExpiry)?'No expiry':fmtDate(existing.expiry)}`
         :'Click to add';
-      return`<div class="doc-item ${cls}" onclick="openAddForVesselType('${escH(e.company)}','${escH(e.vessel)}','${escH(e.vtype)}','${escH(t)}')" title="${cls==='missing'?'Add document':'Edit document'}">
+      return`<div class="doc-item ${cls}" onclick="${SESSION.role==='editor'?`openAddForVesselType('${escH(e.company)}','${escH(e.vessel)}','${escH(e.vtype)}','${escH(t)}')`:`viewDocDetail('${existing?.id||''}')`}" title="${cls==='missing'?'Add document':'View/edit'}">
         <i class="ti ${icon}"></i>
         <div class="doc-info">
           <div class="doc-name">${escH(t)}</div>
@@ -1793,7 +1932,7 @@ function renderTracker(){
       <div class="vessel-hdr">
         <div>
           <div class="vessel-name"><i class="ti ti-ship"></i> ${escH(e.vessel)}</div>
-          <div class="vessel-meta">${escH(e.company)} · ${escH(e.vtype||'—')}</div>
+          <div class="vessel-meta">${escH(e.company)} · ${escH(e.vtype||'No type set')}</div>
         </div>
         <div style="text-align:right">
           <span class="badge ${ds==='complete'?'complete':ds==='partial'?'partial':'missing'}">${ds.charAt(0).toUpperCase()+ds.slice(1)}</span>
@@ -1812,52 +1951,34 @@ function renderTracker(){
 function openAddForVesselType(company,vessel,vtype,docType){
   const existing=db.documents.find(d=>d.company===company&&d.vessel===vessel&&d.type===docType);
   if(existing){editDoc(existing.id);return;}
-  if(SESSION.role!=='editor'){showToast('View only — cannot add documents','warn');return;}
   openAddDoc();
   setTimeout(()=>{
-    document.getElementById('m-company').value=company;
-    onModalCompanyChange();
+    const coSel=document.getElementById('m-company');
+    if(coSel){coSel.value=company;onModalCompanyChange();}
     setTimeout(()=>{
-      document.getElementById('m-vessel').value=vessel;
-      onModalVesselChange();
-      document.getElementById('m-type').value=docType;
-    },60);
-  },60);
+      const vSel=document.getElementById('m-vessel');if(vSel){vSel.value=vessel;onModalVesselChange();}
+      const tSel=document.getElementById('m-type');if(tSel)tSel.value=docType;
+    },80);
+  },80);
 }
 
-// ── TRACKER EXCEL EXPORT ─────────────────────────────────────
 function exportTrackerExcel(){
-  const vesselMap={};
-  db.documents.forEach(d=>{
-    const key=d.vessel+'|||'+d.company;
-    if(!vesselMap[key])vesselMap[key]={vessel:d.vessel,company:d.company,vtype:d.vtype||'',docs:[]};
-    vesselMap[key].docs.push(d);
-    if(d.vtype)vesselMap[key].vtype=d.vtype;
-  });
-  db.companies.forEach(co=>{
-    (co.vessels||[]).forEach(v=>{
-      const vname=v.name||v;const key=vname+'|||'+co.name;
-      if(!vesselMap[key])vesselMap[key]={vessel:vname,company:co.name,vtype:v.vtype||'',docs:[]};
-    });
-  });
-
-  const rows=Object.values(vesselMap).map(e=>{
-    const{have,total}=getVesselCounts(e.vessel,e.company);
-    const pct=total>0?Math.round(have/total*100)+'%':'0%';
-    const req=getRequiredTypes(e.vtype);
-    const row={Company:e.company,Vessel:e.vessel,'Vessel type':e.vtype,
-      'Docs complete':have,'Docs required':total,'Completion':pct,
-      'Status':getVesselDocStatus(e.vessel,e.company).toUpperCase()};
-    req.forEach(t=>{
-      const ex=e.docs.find(d=>d.type===t);
-      row[t]=ex?(ex.noExpiry?'No expiry':(getStatus(ex)==='expired'?'EXPIRED':ex.expiry||'Present')):'MISSING';
+  const rows=getAllVesselKeys().map(k=>{
+    const[vessel,company]=k.split('|||');
+    const vtype=getVesselVtype(vessel,company);
+    const{have,total}=getVesselCounts(vessel,company);
+    const row={Company:company,Vessel:vessel,'Vessel type':vtype,
+      'Docs complete':have,'Docs required':total,
+      'Completion':total>0?Math.round(have/total*100)+'%':'0%',
+      'Status':getVesselDocStatus(vessel,company).toUpperCase()};
+    getRequiredTypes(vtype).forEach(t=>{
+      const ex=db.documents.find(d=>d.company===company&&d.vessel===vessel&&d.type===t);
+      row[t]=ex?(toBool(ex.noExpiry)?'No expiry':getStatus(ex)==='expired'?'EXPIRED':ex.expiry||'Present'):'MISSING';
     });
     return row;
   });
-
   const ws=XLSX.utils.json_to_sheet(rows);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Document Tracker');
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Document Tracker');
   XLSX.writeFile(wb,'GENTUNA_FIP_Tracker_Report.xlsx');
 }
 
@@ -1870,22 +1991,15 @@ function renderCompanies(){
     const dc=db.documents.filter(d=>d.company===co.name).length;
     const vessels=co.vessels||[];
     const emails=(co.emails||[]).map(e=>`<span class="etag">${escH(e)}</span>`).join('');
-    // Group vessels by type
     const grouped={};
-    vessels.forEach(v=>{
-      const vt=v.vtype||'Other';
-      if(!grouped[vt])grouped[vt]=[];
-      grouped[vt].push(v);
-    });
+    vessels.forEach(v=>{const vt=v.vtype||'Other';if(!grouped[vt])grouped[vt]=[];grouped[vt].push(v);});
     const vesselHTML=Object.entries(grouped).map(([vt,vs])=>
       `<div style="margin-bottom:6px">
         <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">${escH(vt)}</div>
-        ${vs.map(v=>`<span class="etag" style="margin:2px">
-          <i class="ti ti-ship" style="font-size:11px"></i> ${escH(v.name||v)}
+        ${vs.map(v=>`<span class="etag" style="margin:2px"><i class="ti ti-ship" style="font-size:11px"></i> ${escH(v.name||v)}
           ${isEditor?`<button onclick="openEditVessel('${co.id}','${escH(v.name||v)}')" style="background:none;border:none;cursor:pointer;color:var(--blue);font-size:11px;padding:0 2px" title="Edit vessel">✎</button>`:''}
         </span>`).join('')}
       </div>`).join('');
-
     return`<div class="card" style="margin-bottom:10px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start">
       <div>
         <div style="font-size:14px;font-weight:700;margin-bottom:3px">${escH(co.name)}</div>
@@ -1902,14 +2016,11 @@ function renderCompanies(){
   }).join('');
 }
 
-// Vessel editing from company card
-let editVesselCoId=null;let editVesselOldName=null;
 function openEditVessel(coId,oldName){
   const co=db.companies.find(c=>c.id===coId);
   const v=co?.vessels?.find(ve=>(ve.name||ve)===oldName);
-  // Build modal HTML
-  const vtypeOpts=db.vTypes.map(t=>`<option value="${t}" ${(v?.vtype||''===t)?'selected':''}>${t}</option>`).join('');
-  const modalHtml=`<div class="modal-bg" id="ev-modal-bg" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:300;padding:1rem">
+  const vtypeOpts=db.vTypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');
+  const html=`<div class="modal-bg" id="ev-modal-bg" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:300;padding:1rem">
     <div class="modal modal-sm" style="pointer-events:all">
       <h2>Edit vessel</h2>
       <div class="fr"><label>Vessel name</label><input id="ev-name" value="${escH(oldName)}" style="font-size:13px;width:100%;padding:8px 10px;border-radius:var(--r);border:0.5px solid var(--border2)"></div>
@@ -1924,9 +2035,8 @@ function openEditVessel(coId,oldName){
       </div>
     </div>
   </div>`;
-  document.body.insertAdjacentHTML('beforeend',modalHtml);
-  // Pre-select current vtype
-  if(v?.vtype) document.getElementById('ev-vtype').value=v.vtype;
+  document.body.insertAdjacentHTML('beforeend',html);
+  if(v?.vtype)setTimeout(()=>{const s=document.getElementById('ev-vtype');if(s)s.value=v.vtype;},50);
 }
 
 function saveEditVessel(coId,oldName){
@@ -1934,14 +2044,14 @@ function saveEditVessel(coId,oldName){
   const vtype=document.getElementById('ev-vtype').value;
   document.getElementById('ev-modal-bg').remove();
   if(!name)return;
-  const co=db.companies.find(c=>c.id===coId);
-  if(!co)return;
+  const co=db.companies.find(c=>c.id===coId);if(!co)return;
   co.vessels=co.vessels.map(ve=>(ve.name||ve)===oldName?{name,vtype}:ve);
   db.documents.forEach(d=>{if(d.company===co.name&&d.vessel===oldName){d.vessel=name;if(vtype)d.vtype=vtype;}});
-  saveCoToSheets(co).then(()=>{
-    db.documents.filter(d=>d.company===co.name&&d.vessel===name).forEach(d=>saveDocToSheets(d));
-    renderAll();
-    showToast('Vessel updated','ok');
+  saveCoToSheets(co).then(ok=>{
+    if(ok){
+      db.documents.filter(d=>d.company===co.name&&d.vessel===name).forEach(d=>saveDocToSheets(d));
+      renderAll();showToast('Vessel updated','ok');
+    }
   });
 }
 
@@ -1954,13 +2064,12 @@ function renderReminders(){
 
   const d1=db.settings.days1||90;
   const urgent=db.documents.filter(d=>{
-    if(d.noExpiry===true||d.noExpiry==='TRUE'||!d.expiry)return false;
+    if(toBool(d.noExpiry)||!d.expiry)return false;
     return daysLeft(d.expiry)<=d1;
   }).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
 
   const el=document.getElementById('reminder-list');
   if(!urgent.length){el.innerHTML='<div class="empty">No documents require reminders right now.</div>';return;}
-
   el.innerHTML=urgent.map(d=>{
     const dl=daysLeft(d.expiry);const st=getStatus(d);
     const co=db.companies.find(c=>c.name===d.company);
@@ -1968,8 +2077,8 @@ function renderReminders(){
     return`<div class="card" style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;margin-bottom:8px">
       <div>
         <div style="font-size:13px;font-weight:700">${escH(d.company)} — ${escH(d.vessel||'—')}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px">${escH(d.type)} · ${d.num?escH(d.num)+' · ':''} Expires: ${fmtDate(d.expiry)}</div>
-        <div style="font-size:11px;margin-top:4px;font-weight:700;color:${dl<0?'var(--red)':dl<=7?'var(--red)':dl<=30?'var(--amber)':'var(--blue)'}">${dl<0?'Overdue by '+Math.abs(dl)+' days':dl+' days remaining'}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${escH(d.type)}${d.num?' · '+escH(d.num):''} · Expires: ${fmtDate(d.expiry)}</div>
+        <div style="font-size:11px;margin-top:4px;font-weight:700;color:${dl<0?'var(--red)':dl<=30?'var(--red)':'var(--amber)'}">${dl<0?Math.abs(dl)+' days overdue':dl+' days remaining'}</div>
         <div style="font-size:10px;color:var(--text2);margin-top:2px">Notify: ${ae.length?ae.join(', '):'No emails configured'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
@@ -1982,10 +2091,7 @@ function renderReminders(){
 
 function updateReminderBadge(){
   const d1=db.settings.days1||90;
-  const count=db.documents.filter(d=>{
-    if(d.noExpiry===true||d.noExpiry==='TRUE'||!d.expiry)return false;
-    return daysLeft(d.expiry)<=d1;
-  }).length;
+  const count=db.documents.filter(d=>!toBool(d.noExpiry)&&d.expiry&&daysLeft(d.expiry)<=d1).length;
   const badge=document.getElementById('reminder-badge');
   if(badge){badge.textContent=count;badge.style.display=count>0?'':'none';}
 }
@@ -2003,9 +2109,8 @@ function renderAdminEmailTags(){
   ).join('');
 }
 function addAdminEmail(){
-  const v=document.getElementById('new-admin-email').value.trim();
-  if(!v)return;
-  if(!db.settings.adminEmails.includes(v)){db.settings.adminEmails.push(v);}
+  const v=document.getElementById('new-admin-email').value.trim();if(!v)return;
+  if(!db.settings.adminEmails.includes(v))db.settings.adminEmails.push(v);
   scheduleSaveSettings();renderAdminEmailTags();
   document.getElementById('new-admin-email').value='';
 }
@@ -2037,30 +2142,45 @@ function saveTmpl(i){
 function scheduleSaveSettings(){
   clearTimeout(settingsSaveTimer);
   settingsSaveTimer=setTimeout(async()=>{
+    // Collect all settings values including emailMode
     db.settings.days1=parseInt(document.getElementById('rem-d1')?.value)||90;
     db.settings.days2=parseInt(document.getElementById('rem-d2')?.value)||60;
     db.settings.days3=parseInt(document.getElementById('rem-d3')?.value)||30;
     db.settings.days4=parseInt(document.getElementById('rem-d4')?.value)||7;
     db.settings.sessionTimeout=parseInt(document.getElementById('set-timeout')?.value)||30;
+    // emailMode is saved directly on db.settings when radio changes
     const res=await safeSend('saveSettings',db.settings);
     if(res&&res.success)setSyncStatus('ok','Settings saved · '+new Date().toLocaleTimeString());
   },1500);
 }
 
+function saveEmailMode(){
+  const mode=document.querySelector('input[name="email-mode"]:checked')?.value||'auto';
+  db.settings.emailMode=mode;
+  const hint=document.getElementById('email-mode-hint');
+  if(hint)hint.textContent=mode==='auto'?'Emails sent automatically every day at 8am via Gmail.':'Emails only sent when you click Send manually.';
+  scheduleSaveSettings();
+}
+
+function applyEmailModeUI(){
+  const mode=db.settings.emailMode||'auto';
+  const r=document.getElementById('mode-'+mode);if(r)r.checked=true;
+  const hint=document.getElementById('email-mode-hint');
+  if(hint)hint.textContent=mode==='auto'?'Emails sent automatically every day at 8am via Gmail.':'Emails only sent when you click Send manually.';
+}
+
 function fillTmpl(tmpl,d){
-  const dl=(!d.expiry||d.noExpiry)?'N/A':(daysLeft(d.expiry)<0?'OVERDUE':daysLeft(d.expiry)+' days');
-  return tmpl.replace(/{{company}}/g,d.company||'')
-    .replace(/{{vessel}}/g,d.vessel||'')
-    .replace(/{{vessel_type}}/g,d.vtype||'')
-    .replace(/{{doc_type}}/g,d.type||'')
-    .replace(/{{doc_num}}/g,d.num||'N/A')
-    .replace(/{{expiry_date}}/g,fmtDate(d.expiry))
-    .replace(/{{days_left}}/g,dl)
-    .replace(/{{link}}/g,d.link||'');
+  const dl=(!d.expiry||toBool(d.noExpiry))?'N/A':(daysLeft(d.expiry)<0?Math.abs(daysLeft(d.expiry))+' days overdue':daysLeft(d.expiry)+' days');
+  return(tmpl||'')
+    .replace(/{{company}}/g,d.company||'').replace(/{{vessel}}/g,d.vessel||'')
+    .replace(/{{vessel_type}}/g,d.vtype||'').replace(/{{doc_type}}/g,d.type||'')
+    .replace(/{{doc_num}}/g,d.num||'N/A').replace(/{{expiry_date}}/g,fmtDate(d.expiry))
+    .replace(/{{days_left}}/g,dl).replace(/{{link}}/g,d.link||'');
 }
 
 function getTmplIdx(dl){
   const s=db.settings;
+  if(dl<0)return 3; // overdue → reminder 4
   if(dl<=(s.days4||7))return 3;
   if(dl<=(s.days3||30))return 2;
   if(dl<=(s.days2||60))return 1;
@@ -2071,172 +2191,85 @@ function sendReminderDoc(id){
   const d=db.documents.find(x=>x.id===id);if(!d)return;
   const co=db.companies.find(c=>c.name===d.company);
   const ae=[...(db.settings.adminEmails||[]),...(co?.emails||[])];
-  const dl=d.noExpiry?9999:daysLeft(d.expiry);
+  const dl=toBool(d.noExpiry)?9999:daysLeft(d.expiry);
   const t=(db.settings.templates||DEF_TMPLS)[getTmplIdx(dl)]||DEF_TMPLS[0];
   window.open('mailto:'+ae.join(',')+'?subject='+encodeURIComponent(fillTmpl(t.subject,d))+'&body='+encodeURIComponent(fillTmpl(t.body,d)));
 }
 
-// ── TIMELINE ─────────────────────────────────────────────────
-function renderTimeline(){
-  const el=document.getElementById('timeline-content');if(!el)return;
-  const today=new Date();
-  const end=new Date();end.setMonth(end.getMonth()+12);
-  const docs=db.documents
-    .filter(d=>d.expiry&&!d.noExpiry&&new Date(d.expiry)>=today&&new Date(d.expiry)<=end)
-    .sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
-
-  if(!docs.length){el.innerHTML='<div class="empty">No documents expiring in the next 12 months</div>';return;}
-
-  // Group by month
-  const months={};
-  docs.forEach(d=>{
-    const m=d.expiry.slice(0,7);
-    if(!months[m])months[m]=[];
-    months[m].push(d);
-  });
-
-  el.innerHTML=Object.entries(months).map(([m,ds])=>{
-    const mLabel=new Date(m+'-01T00:00:00').toLocaleDateString('en-PH',{year:'numeric',month:'long'});
-    const items=ds.map(d=>{
-      const dl=daysLeft(d.expiry);
-      const col=dl<=7?'var(--red)':dl<=30?'var(--red)':dl<=90?'var(--amber)':'var(--green)';
-      return`<div class="tl-item">
-        <div class="tl-dot" style="background:${col}"></div>
-        <div class="tl-date">${fmtDate(d.expiry)}</div>
-        <div class="tl-info">
-          <div class="tl-name">${escH(d.company)} / ${escH(d.vessel||'—')}</div>
-          <div class="tl-sub">${escH(d.type)}${d.num?' · '+escH(d.num):''} · ${dl}d left</div>
-        </div>
-        ${d.link?`<a href="${escH(d.link)}" target="_blank" style="color:var(--blue);font-size:13px"><i class="ti ti-external-link"></i></a>`:''}
-        ${SESSION.role==='editor'?`<button class="ib e" onclick="editDoc('${d.id}')" style="flex-shrink:0"><i class="ti ti-edit"></i></button>`:''}
-      </div>`;
-    }).join('');
-    return`<div class="tl-month">${escH(mLabel)} (${ds.length})</div>${items}`;
-  }).join('');
-}
-
-// ── NOTIFICATIONS ─────────────────────────────────────────────
-function updateNotifPanel(){
-  const d1=db.settings.days1||90;
-  const urgent=db.documents.filter(d=>{
-    if(d.noExpiry===true||d.noExpiry==='TRUE'||!d.expiry)return false;
-    return daysLeft(d.expiry)<=d1;
-  }).sort((a,b)=>new Date(a.expiry)-new Date(b.expiry));
-
-  const count=urgent.length;
-  const cnt=document.getElementById('notif-count');
-  if(cnt){cnt.textContent=count;cnt.style.display=count?'flex':'none';}
-
-  const nl=document.getElementById('notif-list');
-  if(!nl)return;
-  if(!urgent.length){nl.innerHTML='<div class="empty">No urgent notifications</div>';return;}
-  nl.innerHTML=urgent.slice(0,10).map(d=>{
-    const dl=daysLeft(d.expiry);
-    return`<div class="notif-item" onclick="switchTab('reminders');toggleNotifPanel()">
-      <div class="ni-title">${escH(d.company)} — ${escH(d.vessel||'—')}</div>
-      <div class="ni-sub">${escH(d.type)} · ${dl<0?'Overdue by '+Math.abs(dl)+'d':dl+'d remaining'}</div>
-    </div>`;
-  }).join('');
-}
-
-function toggleNotifPanel(){ /* removed */ }
-
 // ── SETTINGS ─────────────────────────────────────────────────
 function renderSettings(){
-  renderDocTypeList();
-  renderVTypeList();
-  renderDocRules();
-  renderAuditStats();
-  const st=document.getElementById('set-timeout');
-  if(st)st.value=db.settings.sessionTimeout||30;
+  renderDocTypeList();renderVTypeList();renderDocRules();renderAuditStats();
+  const st=document.getElementById('set-timeout');if(st)st.value=db.settings.sessionTimeout||30;
+  updatePasswordStatusIndicators();
 }
 
 function renderDocTypeList(){
   const el=document.getElementById('doctype-list');if(!el)return;
-  el.innerHTML=db.licTypes.map(t=>
-    `<div class="type-row"><span>${escH(t)}</span>
-      <button class="ib d" onclick="removeDocType('${escH(t)}')"><i class="ti ti-trash"></i></button>
-    </div>`).join('');
+  el.innerHTML=db.licTypes.map(t=>`<div class="type-row"><span>${escH(t)}</span>
+    <button class="ib d" onclick="removeDocType('${escH(t)}')"><i class="ti ti-trash"></i></button></div>`).join('');
 }
 function addDocType(){
   const v=document.getElementById('new-doctype').value.trim();if(!v)return;
-  if(!db.licTypes.includes(v)){db.licTypes.push(v);}
+  if(!db.licTypes.includes(v))db.licTypes.push(v);
   safeSend('saveLicTypes',{list:db.licTypes}).then(()=>renderSettings());
   document.getElementById('new-doctype').value='';
 }
 function removeDocType(t){
-  if(!confirm('Remove document type "'+t+'"?'))return;
+  if(!confirm('Remove "'+t+'"?'))return;
   db.licTypes=db.licTypes.filter(x=>x!==t);
-  // Also remove from docRules
   Object.keys(db.docRules).forEach(vt=>{db.docRules[vt]=db.docRules[vt].filter(x=>x!==t);});
-  safeSend('saveLicTypes',{list:db.licTypes});
-  safeSend('saveDocRules',{rules:db.docRules});
+  safeSend('saveLicTypes',{list:db.licTypes});safeSend('saveDocRules',{rules:db.docRules});
   renderSettings();renderTracker();
 }
 
 function renderVTypeList(){
   const el=document.getElementById('vtype-list');if(!el)return;
-  el.innerHTML=db.vTypes.map(t=>
-    `<span class="etag">${escH(t)}<button onclick="removeVType('${escH(t)}')">×</button></span>`
-  ).join('');
-  // Also update vessel type dropdowns in co modal
+  el.innerHTML=db.vTypes.map(t=>`<span class="etag">${escH(t)}<button onclick="removeVType('${escH(t)}')">×</button></span>`).join('');
   const nvv=document.getElementById('new-co-vessel-vtype');
-  if(nvv){nvv.innerHTML='<option value="">Vessel type…</option>'+db.vTypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');}
+  if(nvv)nvv.innerHTML='<option value="">Vessel type…</option>'+db.vTypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');
 }
 function addVType(){
   const v=document.getElementById('new-vtype').value.trim();if(!v)return;
-  if(!db.vTypes.includes(v)){db.vTypes.push(v);}
+  if(!db.vTypes.includes(v))db.vTypes.push(v);
   safeSend('saveVTypes',{list:db.vTypes}).then(()=>renderSettings());
   document.getElementById('new-vtype').value='';
 }
 function removeVType(t){
   db.vTypes=db.vTypes.filter(x=>x!==t);
-  safeSend('saveVTypes',{list:db.vTypes});
-  renderSettings();
+  safeSend('saveVTypes',{list:db.vTypes});renderSettings();
 }
 
 function renderDocRules(){
   const el=document.getElementById('doc-rules-list');if(!el)return;
   el.innerHTML=db.vTypes.map(vt=>{
     const required=db.docRules[vt]||[];
-    const checks=db.licTypes.map(t=>
-      `<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer">
-        <input type="checkbox" ${required.includes(t)?'checked':''} onchange="toggleDocRule('${escH(vt)}','${escH(t)}',this.checked)">
-        ${escH(t)}
-      </label>`).join('');
+    const checks=db.licTypes.map(t=>`<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;cursor:pointer">
+      <input type="checkbox" ${required.includes(t)?'checked':''} onchange="toggleDocRule('${escH(vt)}','${escH(t)}',this.checked)"> ${escH(t)}</label>`).join('');
     return`<div style="margin-bottom:12px;padding-bottom:12px;border-bottom:0.5px solid var(--border)">
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--blue)">${escH(vt)}</div>
-      ${checks}
-    </div>`;
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--blue)">${escH(vt)}</div>${checks}</div>`;
   }).join('');
 }
-
 function toggleDocRule(vt,dt,checked){
   if(!db.docRules[vt])db.docRules[vt]=[];
   if(checked){if(!db.docRules[vt].includes(dt))db.docRules[vt].push(dt);}
-  else{db.docRules[vt]=db.docRules[vt].filter(x=>x!==dt);}
-  safeSend('saveDocRules',{rules:db.docRules});
-  renderTracker();
+  else db.docRules[vt]=db.docRules[vt].filter(x=>x!==dt);
+  safeSend('saveDocRules',{rules:db.docRules});renderTracker();
 }
 
 function renderAuditStats(){
   const el=document.getElementById('audit-stats');if(!el)return;
   const docs=db.documents;
-  const mostMissing=db.licTypes.map(t=>({type:t,missing:db.documents.filter(d=>d.type===t).length}))
-    .sort((a,b)=>a.missing-b.missing)[0];
   el.innerHTML=[
     ['Total documents',docs.length,'var(--blue)'],
     ['Active',docs.filter(d=>getStatus(d)==='active').length,'var(--green)'],
     ['Expired',docs.filter(d=>getStatus(d)==='expired').length,'var(--red)'],
-    ['Companies',new Set(docs.map(d=>d.company).filter(Boolean)).size,'var(--blue)'],
-    ['Vessels',new Set(docs.map(d=>d.vessel+'|'+d.company).filter(k=>k!=='|')).size,'var(--purple)'],
-    ['Most missing type',mostMissing?mostMissing.type:'—','var(--amber)'],
+    ['Companies',db.companies.length,'var(--blue)'],
+    ['Vessels',getAllVesselKeys().length,'var(--purple)'],
   ].map(([lbl,val,col])=>
     `<div style="background:var(--surface2);border-radius:var(--r);padding:.75rem 1rem">
-      <div style="font-size:18px;font-weight:700;color:${col}">${escH(String(val))}</div>
+      <div style="font-size:18px;font-weight:700;color:${col}">${val}</div>
       <div style="font-size:11px;color:var(--text2);margin-top:2px">${escH(lbl)}</div>
-    </div>`
-  ).join('');
+    </div>`).join('');
 }
 
 async function loadChangelog(){
@@ -2245,20 +2278,21 @@ async function loadChangelog(){
     if(!res||res.error)return;
     const el=document.getElementById('changelog-list');if(!el)return;
     if(!res.entries||!res.entries.length){el.innerHTML='<div class="empty">No activity yet</div>';return;}
-    el.innerHTML=res.entries.map(e=>
-      `<div style="display:flex;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:12px">
-        <div style="flex-shrink:0;width:140px;color:var(--text2)">${fmtDate(String(e.timestamp).slice(0,10))}</div>
+    el.innerHTML=res.entries.map(e=>`
+      <div style="display:flex;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:12px">
+        <div style="flex-shrink:0;width:140px;color:var(--text2)">${fmtDate(String(e.timestamp||'').slice(0,10))}</div>
         <div><b>${escH(e.action||'')}</b> ${escH(e.recordType||'')} · ${escH(e.recordDesc||'')} <span style="color:var(--text3)">(${escH(e.performedBy||'')})</span></div>
       </div>`).join('');
-  }catch(e){console.error('loadChangelog:',e);}
+  }catch(e){console.error('changelog:',e);}
 }
 
 function exportSettings(){
   const s={licTypes:db.licTypes,vTypes:db.vTypes,docRules:db.docRules,settings:db.settings};
-  const blob=new Blob([JSON.stringify(s,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='GENTUNA_FIP_Settings_'+new Date().toISOString().slice(0,10)+'.json';
-  a.click();URL.revokeObjectURL(a.href);
+  const a=Object.assign(document.createElement('a'),{
+    href:'data:application/json,'+encodeURIComponent(JSON.stringify(s,null,2)),
+    download:'GENTUNA_FIP_Settings_'+new Date().toISOString().slice(0,10)+'.json'
+  });
+  a.click();
 }
 function importSettings(inp){
   const file=inp.files[0];if(!file)return;inp.value='';
@@ -2270,25 +2304,32 @@ function importSettings(inp){
       if(data.vTypes)db.vTypes=data.vTypes;
       if(data.docRules)db.docRules=data.docRules;
       if(data.settings)db.settings=Object.assign(db.settings,data.settings);
-      safeSend('saveLicTypes',{list:db.licTypes});
-      safeSend('saveVTypes',{list:db.vTypes});
-      safeSend('saveDocRules',{rules:db.docRules});
-      safeSend('saveSettings',db.settings);
-      renderAll();showToast('Settings imported successfully','ok');
+      safeSend('saveLicTypes',{list:db.licTypes});safeSend('saveVTypes',{list:db.vTypes});
+      safeSend('saveDocRules',{rules:db.docRules});safeSend('saveSettings',db.settings);
+      renderAll();showToast('Settings imported','ok');
     }catch(err){showToast('Could not import: '+err.message,'error');}
   };reader.readAsText(file);
 }
 
+function applySettings(){applyRoleUI();resetSessionTimer();}
+
+function saveEmailMode(){
+  const mode=document.querySelector('input[name="email-mode"]:checked')?.value||'auto';
+  db.settings.emailMode=mode;
+  const hint=document.getElementById('email-mode-hint');
+  if(hint)hint.textContent=mode==='auto'?'Emails sent automatically every day at 8am via Gmail.':'Emails only sent when you click Send manually.';
+  scheduleSaveSettings();
+}
+
 // ── DOCUMENT FORM ─────────────────────────────────────────────
 function openAddDoc(){
-  if(SESSION.role!=='editor'){showToast('View only — cannot add documents','warn');return;}
+  if(SESSION.role!=='editor'){showToast('View only','warn');return;}
   editDocId=null;pendingFile=null;
   document.getElementById('doc-modal-title').textContent='Add document';
   populateDocModal(null);
   document.getElementById('m-hist-section').style.display='none';
   openModal('doc-modal-bg');
 }
-
 function closeDocModal(){closeModal('doc-modal-bg');editDocId=null;pendingFile=null;}
 
 function toggleExpiry(){
@@ -2298,8 +2339,10 @@ function toggleExpiry(){
 }
 
 function populateDocModal(d){
+  // Populate company select
   const coSel=document.getElementById('m-company');
   coSel.innerHTML='<option value="">Select company…</option>'+db.companies.map(c=>`<option value="${escH(c.name)}">${escH(c.name)}</option>`).join('');
+  // Populate doc type select
   document.getElementById('m-type').innerHTML='<option value="">Select document type…</option>'+db.licTypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');
 
   if(d){
@@ -2308,12 +2351,15 @@ function populateDocModal(d){
     document.getElementById('m-vtype').value=d.vtype||'';
     document.getElementById('m-type').value=d.type||'';
     document.getElementById('m-num').value=d.num||'';
-    document.getElementById('m-issued').value=d.issued||'';
-    document.getElementById('m-expiry').value=d.expiry||'';
-    document.getElementById('m-noexpiry').checked=d.noExpiry===true||d.noExpiry==='TRUE';
-    document.getElementById('m-expiry').disabled=d.noExpiry===true||d.noExpiry==='TRUE';
+    document.getElementById('m-issued').value=safeDate(d.issued);
+    document.getElementById('m-expiry').value=safeDate(d.expiry);
+    const noExp=toBool(d.noExpiry);
+    document.getElementById('m-noexpiry').checked=noExp;
+    document.getElementById('m-expiry').disabled=noExp;
     document.getElementById('m-link').value=d.link||'';
     document.getElementById('m-notes').value=d.notes||'';
+    // Show open link button if link exists
+    updateLinkOpenBtn(d.link||'');
     if(d.driveFileUrl){
       document.getElementById('m-file-preview').innerHTML=
         `<div class="fbadge"><i class="ti ti-file"></i>${escH(d.driveFileName||'Current file')}
@@ -2322,8 +2368,7 @@ function populateDocModal(d){
         </div>`;
       pendingFile={driveFileId:d.driveFileId,driveFileName:d.driveFileName,driveFileUrl:d.driveFileUrl};
     } else {
-      document.getElementById('m-file-preview').innerHTML='';
-      pendingFile=null;
+      document.getElementById('m-file-preview').innerHTML='';pendingFile=null;
     }
   } else {
     ['m-num','m-link','m-notes'].forEach(id=>document.getElementById(id).value='');
@@ -2334,10 +2379,30 @@ function populateDocModal(d){
     document.getElementById('m-vtype').value='';
     pendingFile=null;
     populateVesselDropdown('','');
+    updateLinkOpenBtn('');
   }
   document.getElementById('m-file-uploading').style.display='none';
   document.getElementById('m-file').value='';
 }
+
+function updateLinkOpenBtn(link){
+  let btn=document.getElementById('m-link-open');
+  if(!btn){
+    // Insert open button after link input
+    const inp=document.getElementById('m-link');
+    if(inp&&inp.parentNode){
+      btn=document.createElement('a');btn.id='m-link-open';btn.target='_blank';
+      btn.style.cssText='font-size:11px;color:var(--blue);margin-top:3px;display:inline-block';
+      inp.parentNode.insertBefore(btn,inp.nextSibling);
+    }
+  }
+  if(btn){
+    if(link){btn.href=link;btn.textContent='Open link ↗';btn.style.display='inline-block';}
+    else{btn.style.display='none';}
+  }
+}
+
+document.getElementById('m-link')?.addEventListener('input',function(){updateLinkOpenBtn(this.value);});
 
 function populateVesselDropdown(company,sel){
   const vs=document.getElementById('m-vessel');
@@ -2364,10 +2429,8 @@ function onModalVesselChange(){
   const vessel=document.getElementById('m-vessel').value;
   const co=db.companies.find(c=>c.name===company);
   const v=co?.vessels?.find(ve=>(ve.name||ve)===vessel);
-  if(v&&v.vtype){document.getElementById('m-vtype').value=v.vtype;}
+  if(v?.vtype)document.getElementById('m-vtype').value=v.vtype;
 }
-
-// Also fire on vessel change
 document.getElementById('m-vessel')?.addEventListener('change',onModalVesselChange);
 
 function clearDocFile(){pendingFile=null;document.getElementById('m-file-preview').innerHTML='';}
@@ -2376,19 +2439,14 @@ async function handleDocFile(inp){
   const file=inp.files[0];if(!file)return;
   const company=document.getElementById('m-company').value;
   const vessel=document.getElementById('m-vessel').value;
-  if(!company||!vessel){showToast('Please select company and vessel before uploading a file','warn');inp.value='';return;}
-
+  if(!company||!vessel){showToast('Select company and vessel before uploading','warn');inp.value='';return;}
+  // Warn if file is large
+  if(file.size>5*1024*1024){showToast('File is over 5MB — upload may fail','warn');}
   document.getElementById('m-file-uploading').style.display='block';
   document.getElementById('m-file-preview').innerHTML='';
-
   try{
     const base64=await fileToBase64(file);
-    const res=await apiGet('uploadFile',{
-      company,vessel,
-      fileName:file.name,mimeType:file.type,
-      base64,
-      pw:SESSION.pwHash
-    });
+    const res=await apiGet('uploadFile',{company,vessel,fileName:file.name,mimeType:file.type,base64,pw:SESSION.pwHash});
     document.getElementById('m-file-uploading').style.display='none';
     if(res&&res.success){
       pendingFile={driveFileId:res.fileId,driveFileName:res.fileName,driveFileUrl:res.fileUrl};
@@ -2399,19 +2457,17 @@ async function handleDocFile(inp){
         </div>`;
       showToast('File uploaded to Google Drive ✓','ok');
     } else {
-      showToast('File upload failed: '+(res?.error||'Unknown error'),'error');
+      showToast('Upload failed: '+(res?.error||'Unknown error'),'error');
     }
   }catch(e){
     document.getElementById('m-file-uploading').style.display='none';
-    showToast('File upload error: '+e.message,'error');
+    showToast('Upload error: '+e.message,'error');
   }
 }
 
 function fileToBase64(file){
   return new Promise((res,rej)=>{
-    const r=new FileReader();
-    r.onload=e=>res(e.target.result);
-    r.onerror=()=>rej(new Error('File read failed'));
+    const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=()=>rej(new Error('File read failed'));
     r.readAsDataURL(file);
   });
 }
@@ -2420,10 +2476,10 @@ function editDoc(id){
   if(SESSION.role!=='editor'){showToast('View only','warn');return;}
   editDocId=id;
   const d=db.documents.find(x=>x.id===id);
-  document.getElementById('doc-modal-title').textContent='Edit / renew document';
+  document.getElementById('doc-modal-title').textContent='Update document';
   populateDocModal(d);
 
-  // History
+  // Show history
   const hist=d.history||[];
   const hs=document.getElementById('m-hist-section');
   const hl=document.getElementById('m-hist-list');
@@ -2434,27 +2490,26 @@ function editDoc(id){
       return`<div class="hist-item" id="hi-${id}-${ai}">
         <div class="hist-hdr">
           <div>
-            <div style="font-size:12px;font-weight:700">${escH(h.num||'—')}</div>
-            <div class="hist-meta">Issued: ${fmtDate(h.issued)} · Expiry: ${fmtDate(h.expiry)} · Saved: ${fmtDate(String(h.savedAt||'').slice(0,10))}</div>
+            <div style="font-size:12px;font-weight:700">${escH(h.num||'No number')} — Expiry: ${fmtDate(h.expiry)}</div>
+            <div class="hist-meta">Issue date: ${fmtDate(h.issued)} · Saved: ${fmtDate(h.savedAt)}</div>
             ${h.link?`<div class="hist-meta"><a href="${escH(h.link)}" target="_blank">Reference ↗</a></div>`:''}
             ${h.notes?`<div class="hist-meta">${escH(h.notes)}</div>`:''}
           </div>
           <div style="display:flex;gap:5px;flex-shrink:0">
-            ${h.driveFileUrl?`<a class="ib" href="${escH(h.driveFileUrl)}" target="_blank" title="Open file"><i class="ti ti-file"></i></a>`:''}
-            <button class="ib e" onclick="toggleHistEdit('${id}',${ai})" title="Edit version"><i class="ti ti-edit"></i></button>
-            <button class="ib d" onclick="deleteHistEntry('${id}',${ai})" title="Delete version"><i class="ti ti-trash"></i></button>
+            ${h.driveFileUrl?`<a class="ib" href="${escH(h.driveFileUrl)}" target="_blank"><i class="ti ti-file"></i></a>`:''}
+            <button class="ib e" onclick="toggleHistEdit('${id}',${ai})"><i class="ti ti-edit"></i></button>
+            <button class="ib d" onclick="deleteHistEntry('${id}',${ai})"><i class="ti ti-trash"></i></button>
           </div>
         </div>
         <div class="hist-edit-form" id="hef-${id}-${ai}">
           <div class="fr-row">
             <div class="fr"><label>Document number</label><input id="he-num-${ai}" value="${escH(h.num||'')}" style="font-size:12px"></div>
-            <div class="fr"><label>Issuing info</label><input id="he-agency-${ai}" value="${escH(h.agency||'')}" style="font-size:12px"></div>
+            <div class="fr"><label>Issue date</label><input type="date" id="he-issued-${ai}" value="${safeDate(h.issued)}" style="font-size:12px"></div>
           </div>
           <div class="fr-row">
-            <div class="fr"><label>Issue date</label><input type="date" id="he-issued-${ai}" value="${h.issued||''}" style="font-size:12px"></div>
-            <div class="fr"><label>Expiry date</label><input type="date" id="he-expiry-${ai}" value="${h.expiry||''}" style="font-size:12px"></div>
+            <div class="fr"><label>Expiry date</label><input type="date" id="he-expiry-${ai}" value="${safeDate(h.expiry)}" style="font-size:12px"></div>
+            <div class="fr"><label>Reference link</label><input type="url" id="he-link-${ai}" value="${escH(h.link||'')}" style="font-size:12px"></div>
           </div>
-          <div class="fr"><label>Reference link</label><input type="url" id="he-link-${ai}" value="${escH(h.link||'')}" placeholder="https://…" style="font-size:12px"></div>
           <div class="fr"><label>Notes</label><textarea id="he-notes-${ai}" style="font-size:12px;min-height:44px">${escH(h.notes||'')}</textarea></div>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
             <button type="button" class="btn sm" onclick="toggleHistEdit('${id}',${ai})">Cancel</button>
@@ -2463,47 +2518,32 @@ function editDoc(id){
         </div>
       </div>`;
     }).join('');
-  } else { hs.style.display='none'; }
-
+  } else {
+    hs.style.display='none';
+  }
   openModal('doc-modal-bg');
 }
 
-function viewDocDetail(id){
-  const d=db.documents.find(x=>x.id===id);if(!d)return;
-  // Open edit form in view mode, or show a simple detail view
-  if(SESSION.role==='editor'){editDoc(id);}
-  else{
-    alert(`Document details:\n\nCompany: ${d.company}\nVessel: ${d.vessel||'—'}\nVessel type: ${d.vtype||'—'}\nDocument type: ${d.type}\nDocument number: ${d.num||'N/A'}\nExpiry: ${d.noExpiry?'Does not expire':fmtDate(d.expiry)}\nStatus: ${statusLabel(getStatus(d))}\nNotes: ${d.notes||'—'}`);
-  }
-}
-
-function toggleHistEdit(id,idx){
-  const el=document.getElementById(`hef-${id}-${idx}`);
-  if(el)el.classList.toggle('open');
-}
+function toggleHistEdit(id,idx){document.getElementById(`hef-${id}-${idx}`)?.classList.toggle('open');}
 
 async function saveHistEdit(id,idx){
   const d=db.documents.find(x=>x.id===id);if(!d||!d.history)return;
   d.history[idx].num=document.getElementById(`he-num-${idx}`).value;
-  d.history[idx].agency=document.getElementById(`he-agency-${idx}`).value;
   d.history[idx].issued=document.getElementById(`he-issued-${idx}`).value;
   d.history[idx].expiry=document.getElementById(`he-expiry-${idx}`).value;
   d.history[idx].link=document.getElementById(`he-link-${idx}`).value;
   d.history[idx].notes=document.getElementById(`he-notes-${idx}`).value;
   const res=await safeSend('updateHistory',{docId:id,idx,snapshot:d.history[idx]});
-  if(res&&res.success){showToast('Version saved','ok');}
-  toggleHistEdit(id,idx);
-  lsSet(CACHE_KEY,db);
+  if(res&&res.success)showToast('Version saved','ok');
+  toggleHistEdit(id,idx);lsSet(CACHE_KEY,db);
 }
 
 async function deleteHistEntry(id,idx){
   if(!confirm('Delete this version permanently?'))return;
   const d=db.documents.find(x=>x.id===id);if(!d||!d.history)return;
   d.history.splice(idx,1);
-  const res=await safeSend('deleteHistory',{docId:id,idx});
-  if(res&&res.success){showToast('Version deleted','ok');}
-  lsSet(CACHE_KEY,db);
-  editDoc(id); // refresh modal
+  await safeSend('deleteHistory',{docId:id,idx});
+  lsSet(CACHE_KEY,db);editDoc(id);
 }
 
 async function saveDoc(){
@@ -2512,24 +2552,43 @@ async function saveDoc(){
   const type=document.getElementById('m-type').value;
   const noExpiry=document.getElementById('m-noexpiry').checked;
   const expiry=document.getElementById('m-expiry').value;
-  if(!company||!vessel||!type){showToast('Please fill in company, vessel, and document type','error');return;}
-  if(!noExpiry&&!expiry){showToast('Please enter an expiry date, or check "does not expire"','error');return;}
+  const issued=document.getElementById('m-issued').value;
 
-  // If editing, snapshot old version to history
+  // Validate required fields
+  if(!company||!vessel||!type){showToast('Company, vessel and document type are required','error');return;}
+  if(!noExpiry&&!expiry){showToast('Enter an expiry date or check "Does not expire"','error');return;}
+  if(expiry&&!isValidDate(expiry)){showToast('Expiry date is not valid (use YYYY-MM-DD format)','error');return;}
+  if(issued&&!isValidDate(issued)){showToast('Issue date is not valid (use YYYY-MM-DD format)','error');return;}
+
+  // Check for duplicate if adding new
+  if(!editDocId){
+    const dup=db.documents.find(d=>d.company===company&&d.vessel===vessel&&d.type===type);
+    if(dup&&!confirm(`A "${type}" document already exists for ${vessel}. Add anyway?`))return;
+  }
+
+  const btn=document.querySelector('#doc-modal-bg .btn.primary');btnLoad(btn,'Saving…');
+
+  // Build history — only snapshot if expiry date changed
   let history=[];
   if(editDocId){
     const old=db.documents.find(x=>x.id===editDocId);
     if(old){
-      const snap={
-        num:old.num||'',agency:old.agency||'',issued:old.issued||'',
-        expiry:old.expiry||'',noExpiry:old.noExpiry||false,
-        link:old.link||'',notes:old.notes||'',
-        driveFileId:old.driveFileId||'',driveFileName:old.driveFileName||'',driveFileUrl:old.driveFileUrl||'',
-        savedAt:new Date().toISOString().slice(0,10)
-      };
-      history=[...(old.history||[]),snap];
-      // Save snapshot to sheets
-      await safeSend('saveHistory',{docId:editDocId,snapshot:snap});
+      const oldExpiry=safeDate(old.expiry);
+      const newExpiry=noExpiry?'':safeDate(expiry);
+      // Create history only if expiry changed
+      if(oldExpiry!==newExpiry){
+        const snap={
+          num:old.num||'',issued:safeDate(old.issued),
+          expiry:oldExpiry,noExpiry:toBool(old.noExpiry),
+          link:old.link||'',notes:old.notes||'',
+          driveFileId:old.driveFileId||'',driveFileName:old.driveFileName||'',driveFileUrl:old.driveFileUrl||'',
+          savedAt:new Date().toISOString().slice(0,10)
+        };
+        history=[...(old.history||[]),snap];
+        await safeSend('saveHistory',{docId:editDocId,snapshot:snap});
+      } else {
+        history=old.history||[];
+      }
     }
   }
 
@@ -2539,8 +2598,9 @@ async function saveDoc(){
   const doc={
     id:editDocId||uid(),company,vessel,vtype,type,
     num:document.getElementById('m-num').value.trim(),
-    issued:document.getElementById('m-issued').value,
-    expiry:noExpiry?'':expiry,noExpiry,
+    issued:safeDate(issued),
+    expiry:noExpiry?'':safeDate(expiry),
+    noExpiry,
     link:document.getElementById('m-link').value.trim(),
     notes:document.getElementById('m-notes').value.trim(),
     driveFileId:pendingFile?.driveFileId||'',
@@ -2550,55 +2610,41 @@ async function saveDoc(){
   };
 
   const ok=await saveDocToSheets(doc);
+  btnReset(btn);
   if(ok){
-    // Update local db — always upsert, never duplicate
     const idx=db.documents.findIndex(x=>x.id===doc.id);
-    if(idx>=0){
-      db.documents[idx]=doc;
-    } else {
-      // Remove any accidental duplicate with same company+vessel+type if it's a new doc
-      if(!editDocId){
-        const dupIdx=db.documents.findIndex(x=>x.company===doc.company&&x.vessel===doc.vessel&&x.type===doc.type&&x.id!==doc.id);
-        if(dupIdx>=0)db.documents.splice(dupIdx,1);
-      }
-      db.documents.push(doc);
-    }
+    if(idx>=0)db.documents[idx]=doc;else db.documents.push(doc);
     lsSet(CACHE_KEY,db);
-    closeDocModal();
-    renderAll();
-    showToast(editDocId?'Document updated':'Document added','ok');
+    closeDocModal();renderAll();
+    showToast(editDocId?'Document updated ✓':'Document added ✓','ok');
   }
 }
 
 async function delDoc(id){
-  const d=db.documents.find(x=>x.id===id);
-  if(!confirm('Delete "'+d.type+'" for '+d.company+'? This cannot be undone.'))return;
+  const d=db.documents.find(x=>x.id===id);if(!d)return;
+  if(!confirm(`Delete "${d.type}" for ${d.company} / ${d.vessel}? This cannot be undone.`))return;
   db.documents=db.documents.filter(x=>x.id!==id);
   await deleteDocFromSheets(id);
-  lsSet(CACHE_KEY,db);
-  renderAll();showToast('Document deleted','ok');
+  lsSet(CACHE_KEY,db);renderAll();showToast('Document deleted','ok');
 }
 
 // ── CONFLICT MODAL ────────────────────────────────────────────
 let conflictData={};
-function showConflictModal(serverRecord, myRecord){
+function showConflictModal(serverRecord,myRecord){
   conflictData={serverRecord,myRecord};
   const el=document.getElementById('conflict-details');
   const sr=serverRecord;
-  if(el)el.innerHTML=`
-    <b>Their version:</b> ${escH(sr.type)} · ${escH(sr.num||'no number')} · Expiry: ${fmtDate(sr.expiry)} · Modified: ${fmtDate(String(sr.lastModified||'').slice(0,10))}<br>
+  if(el)el.innerHTML=`<b>Their version:</b> ${escH(sr.type)} · ${escH(sr.num||'no number')} · Expiry: ${fmtDate(sr.expiry)} · Modified: ${fmtDate(String(sr.lastModified||'').slice(0,10))}<br>
     <b>Your version:</b> ${escH(myRecord.type)} · ${escH(myRecord.num||'no number')} · Expiry: ${fmtDate(myRecord.expiry)}`;
   openModal('conflict-modal-bg');
 }
 async function resolveConflict(choice){
   closeModal('conflict-modal-bg');
   if(choice==='server'){
-    // Update local with server version
     const idx=db.documents.findIndex(x=>x.id===conflictData.serverRecord.id);
     if(idx>=0)db.documents[idx]=conflictData.serverRecord;
     lsSet(CACHE_KEY,db);renderAll();showToast('Kept their version','ok');
   } else {
-    // Force save mine by clearing clientLastModified
     const doc={...conflictData.myRecord,clientLastModified:''};
     const ok=await saveDocToSheets(doc);
     if(ok){showToast('Kept your version','ok');renderAll();}
@@ -2612,7 +2658,6 @@ function openAddCo(){
   document.getElementById('co-modal-title').textContent='Add company';
   ['co-name','co-contact','co-phone','co-notes'].forEach(f=>document.getElementById(f).value='');
   renderCoEmailTags();renderCoVesselList();
-  // Populate vessel type select
   const nvv=document.getElementById('new-co-vessel-vtype');
   if(nvv)nvv.innerHTML='<option value="">Vessel type…</option>'+db.vTypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');
   openModal('co-modal-bg');
@@ -2628,18 +2673,31 @@ function renderCoVesselList(){
   const el=document.getElementById('co-vessel-list');if(!el)return;
   el.innerHTML=pendingCoVessels.map((v,i)=>
     `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--surface2);border-radius:var(--r);margin-bottom:4px;font-size:12px">
-      <i class="ti ti-ship" style="font-size:14px;color:var(--blue)"></i>
+      <i class="ti ti-ship" style="color:var(--blue)"></i>
       <span style="flex:1"><b>${escH(v.name)}</b> — ${escH(v.vtype||'No type')}</span>
-      <button class="ib e" onclick="openEditVesselInModal(${i})" title="Edit"><i class="ti ti-edit"></i></button>
-      <button class="ib d" onclick="removePCV(${i})" title="Remove"><i class="ti ti-trash"></i></button>
+      <button class="ib e" onclick="openEditVesselInModal(${i})"><i class="ti ti-edit"></i></button>
+      <button class="ib d" onclick="removePCV(${i})"><i class="ti ti-trash"></i></button>
     </div>`).join('');
 }
 function openEditVesselInModal(idx){
   const v=pendingCoVessels[idx];
   const name=prompt('Edit vessel name:',v.name);if(!name)return;
-  const vtype=prompt('Vessel type:',v.vtype||'');
-  pendingCoVessels[idx]={name,vtype:vtype||v.vtype||''};
-  renderCoVesselList();
+  const vtypeOpts=db.vTypes.map(t=>`<option value="${t}" ${t===v.vtype?'selected':''}>${t}</option>`).join('');
+  const html=`<div class="modal-bg" id="ev2-bg" style="position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:400;padding:1rem">
+    <div class="modal modal-sm" style="pointer-events:all">
+      <h2>Edit vessel type</h2>
+      <div class="fr"><label>Vessel type</label>
+        <select id="ev2-vtype" style="width:100%;font-size:13px;padding:8px 10px;border-radius:var(--r);border:0.5px solid var(--border2);background:var(--surface)">
+          <option value="">No type</option>${vtypeOpts}
+        </select>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" onclick="document.getElementById('ev2-bg').remove()">Cancel</button>
+        <button type="button" class="btn primary" onclick="(()=>{pendingCoVessels[${idx}]={name:'${escH(name)}',vtype:document.getElementById('ev2-vtype').value};document.getElementById('ev2-bg').remove();renderCoVesselList();})()">Save</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
 }
 function addCoVessel(){
   const name=document.getElementById('new-co-vessel-name').value.trim();
@@ -2651,24 +2709,27 @@ function addCoVessel(){
   document.getElementById('new-co-vessel-vtype').value='';
 }
 function removePCV(idx){pendingCoVessels.splice(idx,1);renderCoVesselList();}
+
 async function saveCo(){
   const name=document.getElementById('co-name').value.trim();
   if(!name){showToast('Company name is required','error');return;}
-  const co={
-    id:editCoId||uid(),name,
+  const btn=document.querySelector('#co-modal-bg .btn.primary');btnLoad(btn,'Saving…');
+  const co={id:editCoId||uid(),name,
     contact:document.getElementById('co-contact').value.trim(),
     phone:document.getElementById('co-phone').value.trim(),
     notes:document.getElementById('co-notes').value.trim(),
     emails:[...pendingCoEmails],vessels:[...pendingCoVessels]
   };
   const ok=await saveCoToSheets(co);
+  btnReset(btn);
   if(ok){
     const idx=db.companies.findIndex(x=>x.id===co.id);
     if(idx>=0)db.companies[idx]=co;else db.companies.push(co);
-    lsSet(CACHE_KEY,db);
-    closeCoModal();renderAll();showToast(editCoId?'Company updated':'Company added','ok');
+    lsSet(CACHE_KEY,db);closeCoModal();renderAll();
+    showToast(editCoId?'Company updated':'Company added','ok');
   }
 }
+
 function editCo(id){
   if(SESSION.role!=='editor')return;
   editCoId=id;const co=db.companies.find(x=>x.id===id);
@@ -2681,28 +2742,21 @@ function editCo(id){
   pendingCoVessels=JSON.parse(JSON.stringify(co.vessels||[]));
   const nvv=document.getElementById('new-co-vessel-vtype');
   if(nvv)nvv.innerHTML='<option value="">Vessel type…</option>'+db.vTypes.map(t=>`<option value="${escH(t)}">${escH(t)}</option>`).join('');
-  renderCoEmailTags();renderCoVesselList();
-  openModal('co-modal-bg');
+  renderCoEmailTags();renderCoVesselList();openModal('co-modal-bg');
 }
+
 async function deleteCo(id){
   const co=db.companies.find(x=>x.id===id);
-  if(!confirm('Delete company "'+co.name+'"? Documents are not deleted.'))return;
+  if(!confirm(`Delete company "${co.name}"? Documents are not deleted.`))return;
   db.companies=db.companies.filter(x=>x.id!==id);
   await safeSend('deleteCompany',{id});
   lsSet(CACHE_KEY,db);renderAll();
 }
 
 // ── MODAL HELPERS ─────────────────────────────────────────────
-function openModal(id){
-  const bg=document.getElementById(id);
-  if(!bg)return;
-  bg.classList.remove('hidden');bg.scrollTop=0;
-}
-function closeModal(id){
-  const bg=document.getElementById(id);
-  if(!bg)return;
-  bg.classList.add('hidden');
-}
+function openModal(id){const bg=document.getElementById(id);if(!bg)return;bg.classList.remove('hidden');bg.scrollTop=0;}
+function closeModal(id){const bg=document.getElementById(id);if(!bg)return;bg.classList.add('hidden');}
+
 function setupModalBackdrop(bgId,closeFn){
   const bg=document.getElementById(bgId);if(!bg)return;
   bg.addEventListener('mousedown',e=>{bg._bd=e.target===bg;});
@@ -2712,13 +2766,9 @@ setupModalBackdrop('doc-modal-bg',closeDocModal);
 setupModalBackdrop('co-modal-bg',closeCoModal);
 setupModalBackdrop('conflict-modal-bg',()=>closeModal('conflict-modal-bg'));
 
-// Keyboard shortcuts
 document.addEventListener('keydown',e=>{
   if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT')return;
-  if(e.key==='Escape'){
-    closeDocModal();closeCoModal();closeModal('conflict-modal-bg');
-    document.getElementById('notif-panel')?.classList.remove('open');
-  }
+  if(e.key==='Escape'){closeDocModal();closeCoModal();closeModal('conflict-modal-bg');}
   if(e.key==='n'&&SESSION.role==='editor')openAddDoc();
 });
 
@@ -2728,65 +2778,35 @@ function exportExcelData(docs){
   if(!docs.length){showToast('No documents to export','warn');return;}
   const rows=docs.map(d=>({
     'Company':d.company,'Vessel':d.vessel||'','Vessel type':d.vtype||'',
-    'Document type':d.type,'Document number':d.num||'','Issue date':d.issued||'',
-    'Expiry date':(d.noExpiry===true||d.noExpiry==='TRUE')?'No expiry':d.expiry||'',
+    'Document type':d.type,'Document number':d.num||'',
+    'Issue date':safeDate(d.issued),'Expiry date':toBool(d.noExpiry)?'No expiry':safeDate(d.expiry),
     'Status':statusLabel(getStatus(d)),'Reference link':d.link||'',
-    'Drive file':d.driveFileUrl||'','Notes':d.notes||'',
-    'Versions':(d.history||[]).length
+    'Drive file':d.driveFileUrl||'','Notes':d.notes||'','Versions':(d.history||[]).length
   }));
   const ws=XLSX.utils.json_to_sheet(rows);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Documents');
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Documents');
   if(db.companies.length){
-    const cr=db.companies.map(c=>({
-      'Company':c.name,'Contact':c.contact||'',
-      'Emails':(c.emails||[]).join(', '),
-      'Vessels':(c.vessels||[]).map(v=>v.name||v).join(', '),
-      'Phone':c.phone||''
-    }));
+    const cr=db.companies.map(c=>({'Company':c.name,'Contact':c.contact||'','Emails':(c.emails||[]).join(', '),'Vessels':(c.vessels||[]).map(v=>v.name||v).join(', '),'Phone':c.phone||''}));
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(cr),'Companies');
   }
   XLSX.writeFile(wb,'GENTUNA_FIP_Documents_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
-
 function exportPDF(){
   if(!db.documents.length){showToast('No documents to export','warn');return;}
-  const rows=db.documents.map(d=>
-    `<tr><td>${escH(d.company)}</td><td>${escH(d.vessel||'—')}</td><td>${escH(d.vtype||'—')}</td>
-     <td>${escH(d.type)}</td><td>${escH(d.num||'—')}</td>
-     <td>${(d.noExpiry===true||d.noExpiry==='TRUE')?'No expiry':fmtDate(d.expiry)}</td>
-     <td>${statusLabel(getStatus(d)).toUpperCase()}</td></tr>`).join('');
-  const html=`<!DOCTYPE html><html><head><title>GENTUNA FIP</title>
-    <style>body{font-family:Arial;font-size:10px;padding:20px}
-    h2{font-size:14px;margin-bottom:4px}p{font-size:9px;color:#666;margin-bottom:10px}
-    table{width:100%;border-collapse:collapse}
-    th{background:#185FA5;color:#fff;padding:5px 8px;text-align:left;font-size:9px}
-    td{padding:4px 8px;border-bottom:1px solid #eee;font-size:9px}
-    tr:nth-child(even) td{background:#f9f9f9}</style></head>
-    <body><h2>GENTUNA FIP — Document Register</h2>
-    <p>Exported ${new Date().toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'})}</p>
-    <table><thead><tr><th>Company</th><th>Vessel</th><th>Vessel type</th>
-    <th>Document type</th><th>Doc number</th><th>Expiry</th><th>Status</th></tr></thead>
-    <tbody>${rows}</tbody></table></body></html>`;
+  const rows=db.documents.map(d=>`<tr><td>${escH(d.company)}</td><td>${escH(d.vessel||'—')}</td><td>${escH(d.vtype||'—')}</td><td>${escH(d.type)}</td><td>${escH(d.num||'—')}</td><td>${toBool(d.noExpiry)?'No expiry':fmtDate(d.expiry)}</td><td>${statusLabel(getStatus(d)).toUpperCase()}</td></tr>`).join('');
   const w=window.open('','_blank');
-  if(w){w.document.write(html);w.document.close();w.print();}
+  if(w){w.document.write(`<!DOCTYPE html><html><head><title>GENTUNA FIP</title><style>body{font-family:Arial;font-size:10px;padding:20px}h2{font-size:14px}table{width:100%;border-collapse:collapse}th{background:#185FA5;color:#fff;padding:5px 8px;text-align:left;font-size:9px}td{padding:4px 8px;border-bottom:1px solid #eee;font-size:9px}tr:nth-child(even)td{background:#f9f9f9}</style></head><body><h2>GENTUNA FIP — Document Register</h2><p>Exported ${new Date().toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'})}</p><table><thead><tr><th>Company</th><th>Vessel</th><th>Vessel type</th><th>Document type</th><th>Doc number</th><th>Expiry</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></body></html>`);w.document.close();w.print();}
 }
 
 // ── BACKUP ────────────────────────────────────────────────────
-function saveLocalBackup(){
-  const backup={savedAt:new Date().toISOString(),data:JSON.parse(JSON.stringify(db))};
-  lsSet(BACKUP_KEY,backup);
-}
-
+function saveLocalBackup(){lsSet(BACKUP_KEY,{savedAt:new Date().toISOString(),data:JSON.parse(JSON.stringify(db))});}
 function manualBackup(){
-  const backup={version:'gentuna_fip_v9',savedAt:new Date().toISOString(),data:JSON.parse(JSON.stringify(db))};
-  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='GENTUNA_FIP_Backup_'+new Date().toISOString().slice(0,10)+'.json';
-  a.click();URL.revokeObjectURL(a.href);
-  showToast('Backup downloaded','ok');
+  const a=Object.assign(document.createElement('a'),{
+    href:'data:application/json,'+encodeURIComponent(JSON.stringify({version:'gfip_v10',savedAt:new Date().toISOString(),data:db},null,2)),
+    download:'GENTUNA_FIP_Backup_'+new Date().toISOString().slice(0,10)+'.json'
+  });
+  a.click();showToast('Backup downloaded','ok');
 }
-
 function triggerImport(){document.getElementById('import-file').click();}
 function importBackup(inp){
   const file=inp.files[0];if(!file)return;inp.value='';
@@ -2796,43 +2816,19 @@ function importBackup(inp){
       const parsed=JSON.parse(e.target.result);
       const data=parsed.data||parsed;
       if(!data.documents&&!data.companies){showToast('Not a valid backup file','error');return;}
-      if(!confirm('Replace ALL current data with this backup?'))return;
+      if(!confirm('Replace ALL current data with this backup? This cannot be undone.'))return;
       applyLoadedData(data);
-      // Re-save everything
-      safeSend('saveSettings',db.settings);
-      safeSend('saveLicTypes',{list:db.licTypes});
-      safeSend('saveVTypes',{list:db.vTypes});
-      safeSend('saveDocRules',{rules:db.docRules});
+      safeSend('saveSettings',db.settings);safeSend('saveLicTypes',{list:db.licTypes});
+      safeSend('saveVTypes',{list:db.vTypes});safeSend('saveDocRules',{rules:db.docRules});
       db.documents.forEach(d=>safeSend('saveDocument',d));
       db.companies.forEach(c=>safeSend('saveCompany',c));
-      lsSet(CACHE_KEY,db);renderAll();applySettings();
+      lsSet(CACHE_KEY,db);renderAll();
       showToast('Backup restored! Syncing to Google Sheets…','ok');
     }catch(err){showToast('Could not read backup: '+err.message,'error');}
   };reader.readAsText(file);
 }
 
-// ── START ─────────────────────────────────────────────────
-function applySettings(){applyRoleUI();resetSessionTimer();}
-
-function saveEmailMode(){
-  const mode=document.querySelector('input[name="email-mode"]:checked')?.value||'auto';
-  db.settings.emailMode=mode;
-  const hint=document.getElementById('email-mode-hint');
-  if(hint)hint.textContent=mode==='auto'
-    ?'Emails will be sent automatically every day at 8am via Gmail.'
-    :'Emails will only be sent when you click Send manually.';
-  scheduleSaveSettings();
-}
-
-function applyEmailModeUI(){
-  const mode=db.settings.emailMode||'auto';
-  const radio=document.getElementById('mode-'+mode);
-  if(radio)radio.checked=true;
-  const hint=document.getElementById('email-mode-hint');
-  if(hint)hint.textContent=mode==='auto'
-    ?'Emails will be sent automatically every day at 8am via Gmail.'
-    :'Emails will only be sent when you click Send manually.';
-}
+// ── START ─────────────────────────────────────────────────────
 init();
 </script>
 </body>
